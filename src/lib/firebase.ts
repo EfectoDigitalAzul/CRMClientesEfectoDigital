@@ -4,13 +4,12 @@ import { getFirestore, collection, doc, setDoc, getDoc, updateDoc, addDoc, query
 
 // Placeholder config - will be replaced by firebase-applet-config.json if it exists
 const firebaseConfig = {
-  apiKey: "AIzaSyDFfzu5Iyy-kLgFLRRzUEfSybHf-tEq90E",
-  authDomain: "gen-lang-client-0099722167.firebaseapp.com",
-  projectId: "gen-lang-client-0099722167",
-  storageBucket: "gen-lang-client-0099722167.firebasestorage.app",
-  messagingSenderId: "561223078351",
-  appId: "1:561223078351:web:93c043bcc57fefa334c2ba",
-  firestoreDatabaseId: "ai-studio-b25dd903-6073-4870-8eb5-7ce9c93bd9f4"
+  apiKey: "AIzaSyDPF3HzPCU-YsuOW3X-ei_oUPpgCBwZsd4",
+  authDomain: "ai-studio-applet-webapp-168f2.firebaseapp.com",
+  projectId: "ai-studio-applet-webapp-168f2",
+  storageBucket: "ai-studio-applet-webapp-168f2.firebasestorage.app",
+  messagingSenderId: "30932368156",
+  appId: "1:30932368156:web:4da280a0493af457c198d9"
 };
 
 // Import real config if available (only in development)
@@ -36,8 +35,10 @@ export const isFirebaseConfigured = finalConfig && finalConfig.apiKey && finalCo
 const app = initializeApp(isFirebaseConfigured ? finalConfig : { ...firebaseConfig, apiKey: "dummy-key-for-init" });
 export const auth = getAuth(app);
 // Support both standard and AI Studio specific database ID fields
+// For standard Firebase projects, the database ID is often "(default)"
 // @ts-ignore
-export const db = getFirestore(app, finalConfig.firestoreDatabaseId || finalConfig.databaseId || "default");
+const dbId = finalConfig.firestoreDatabaseId || finalConfig.databaseId;
+export const db = dbId ? getFirestore(app, dbId) : getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 
 export const loginWithGoogle = () => signInWithPopup(auth, googleProvider);

@@ -1,0 +1,112 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "User information and role",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["setter", "commercial", "manager"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Lead": {
+      "title": "Lead",
+      "description": "Potential customer information",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "company": { "type": "string" },
+        "country": { "type": "string" },
+        "interest": { "type": "string" },
+        "contactInfo": { "type": "string" },
+        "category": { "type": "string" },
+        "sector": { "type": "string" },
+        "status": { "type": "string" },
+        "assignedSetterId": { "type": "string" },
+        "assignedCommercialId": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "contactInfo", "status", "isActive"]
+    }
+  },
+    "Meeting": {
+      "title": "Meeting",
+      "description": "Scheduled meeting with a lead",
+      "type": "object",
+      "properties": {
+        "leadId": { "type": "string" },
+        "clientId": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "status": { "type": "string" }
+      }
+    },
+    "Client": {
+      "title": "Client",
+      "description": "Client profile and settings",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "accountManagerId": { "type": "string" }
+      }
+    },
+    "ClientHistoryNote": {
+      "title": "Client History Note",
+      "description": "Internal notes for client history",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "content": { "type": "string" },
+        "authorId": { "type": "string" },
+        "date": { "type": "string" },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "url": { "type": "string" },
+              "type": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profiles"
+    },
+    "/clients/{clientId}": {
+      "schema": "Client",
+      "description": "Clients collection"
+    },
+    "/clients/{clientId}/historyNotes/{noteId}": {
+      "schema": "ClientHistoryNote",
+      "description": "Historical notes for a client"
+    },
+    "/leads/{leadId}": {
+      "schema": "Lead",
+      "description": "Leads collection"
+    },
+    "/leads/{leadId}/followUps/{followUpId}": {
+      "schema": { "$ref": "FollowUp" },
+      "description": "Follow-up history for a lead"
+    },
+    "/leads/{leadId}/meetings/{meetingId}": {
+      "schema": { "$ref": "Meeting" },
+      "description": "Meetings for a lead"
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "Notification" },
+      "description": "User notifications"
+    }
+  }
+}

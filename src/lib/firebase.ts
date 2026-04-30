@@ -38,7 +38,18 @@ export const auth = getAuth(app);
 export const db = getFirestore(app, finalConfig.databaseId);
 export const googleProvider = new GoogleAuthProvider();
 
-export const loginWithGoogle = () => signInWithPopup(auth, googleProvider);
+export const loginWithGoogle = async () => {
+  try {
+    return await signInWithPopup(auth, googleProvider);
+  } catch (error: any) {
+    if (error.code === 'auth/popup-closed-by-user') {
+      console.log('El usuario cerró la ventana de inicio de sesión.');
+      return;
+    }
+    console.error('Error al iniciar sesión:', error);
+    throw error;
+  }
+};
 export const logout = () => signOut(auth);
 
 // Error handling helper

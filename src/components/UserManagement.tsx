@@ -291,16 +291,31 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
     <div className="space-y-4 bg-background text-foreground min-h-full">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-foreground uppercase tracking-tighter">Panel de Accesos</h2>
+        {permissions?.canManageStaff && (
+          <Button 
+            size="sm"
+            className="h-8 text-xs font-bold uppercase gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
+            onClick={() => {
+              setNewUser({...newUser, role: 'account_manager'});
+              setIsAddUserOpen(true);
+            }}
+          >
+            <UserPlus size={14} />
+            Crear Acceso Personal
+          </Button>
+        )}
       </div>
 
       <div className="space-y-8">
         {/* Sección de Equipo - Solo para perfiles con permiso canViewStaff */}
         {permissions?.canViewStaff && (
           <div className="space-y-4">
-            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-primary flex items-center gap-2 px-1">
-              <ShieldCheck size={14} />
-              Personal de Equipo
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-black uppercase tracking-[0.2em] text-primary flex items-center gap-2 px-1">
+                <ShieldCheck size={14} />
+                Personal de Equipo
+              </h3>
+            </div>
             <div className="rounded-xl border border-border bg-card shadow-none overflow-hidden">
               <Table>
                 <TableHeader className="bg-muted/50 border-b border-border">

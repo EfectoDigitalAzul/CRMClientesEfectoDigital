@@ -128,17 +128,29 @@ export default function App() {
       window.addEventListener('demo-clients-updated', updateClients);
       return () => window.removeEventListener('demo-clients-updated', updateClients);
     } else {
-      const unsubscribe = onSnapshot(collection(db, 'clients'), (snapshot) => {
+      if (!profile) return;
+
+      const isStaff = profile.role === 'director' || 
+                      profile.role === 'account_manager' || 
+                      profile.email?.endsWith('@efectodigital.com.ar') || 
+                      profile.email?.endsWith('@efectodigital.com');
+
+      const clientsQuery = (isStaff) 
+        ? collection(db, 'clients')
+        : query(collection(db, 'clients'), where('id', '==', profile.assignedClientId || 'none'));
+
+      const unsubscribe = onSnapshot(clientsQuery, (snapshot) => {
         const allClients = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client));
-        // Explicitly filter out the unwanted placeholder if it exists in Firestore
         setClients(allClients.filter(c => 
           !c.name.toLowerCase().includes('mi primer lead') && 
           !c.name.toLowerCase().includes('lead flow')
         ));
+      }, (error) => {
+        console.error("Error fetching clients:", error);
       });
       return () => unsubscribe();
     }
-  }, [isDemoMode]);
+  }, [isDemoMode, profile]);
 
   useEffect(() => {
     if (isDemoMode) {
@@ -162,33 +174,40 @@ export default function App() {
         window.removeEventListener('demo-meetings-updated', updateData);
       };
     } else {
-      const isStaff = profile?.role === 'director' || 
-                      profile?.role === 'account_manager' || 
-                      profile?.email?.endsWith('@efectodigital.com.ar') || 
-                      profile?.email?.endsWith('@efectodigital.com') ||
-                      user?.email?.endsWith('@efectodigital.com.ar') ||
-                      user?.email?.endsWith('@efectodigital.com');
+      if (!profile) return;
+
+      const isStaff = profile.role === 'director' || 
+                      profile.role === 'account_manager' || 
+                      profile.email?.endsWith('@efectodigital.com.ar') || 
+                      profile.email?.endsWith('@efectodigital.com');
       
-      if (!selectedClientId && !isStaff) {
+      // Clients can only see their own leads
+      const effectiveClientId = isStaff ? selectedClientId : profile.assignedClientId;
+
+      if (!effectiveClientId && !isStaff) {
         setLeads([]);
         setMeetings([]);
         return;
       }
 
-      const lQuery = selectedClientId 
-        ? query(collection(db, 'leads'), where('clientId', '==', selectedClientId))
+      const lQuery = effectiveClientId 
+        ? query(collection(db, 'leads'), where('clientId', '==', effectiveClientId))
         : query(collection(db, 'leads'));
         
-      const mQuery = selectedClientId
-        ? query(collection(db, 'meetings'), where('clientId', '==', selectedClientId))
+      const mQuery = effectiveClientId
+        ? query(collection(db, 'meetings'), where('clientId', '==', effectiveClientId))
         : query(collection(db, 'meetings'));
 
       const unsubL = onSnapshot(lQuery, (snap) => {
         setLeads(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead)));
+      }, (error) => {
+        console.error("Error fetching leads:", error);
       });
 
       const unsubM = onSnapshot(mQuery, (snap) => {
         setMeetings(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
+      }, (error) => {
+        console.error("Error fetching meetings:", error);
       });
 
       return () => {
@@ -196,7 +215,7 @@ export default function App() {
         unsubM();
       };
     }
-  }, [selectedClientId, isDemoMode, profile?.role]);
+  }, [selectedClientId, isDemoMode, profile]);
 
   useEffect(() => {
     if (!profile || clients.length === 0) return;
@@ -286,10 +305,24 @@ export default function App() {
         lastNotifiedCount.current = combined.length;
       }
     } else {
+      if (!profile) return;
+      
+      const isStaff = profile.role === 'director' || 
+                      profile.role === 'account_manager' || 
+                      profile.email?.endsWith('@efectodigital.com.ar') || 
+                      profile.email?.endsWith('@efectodigital.com');
+
       // For real mode, we would need to listen to both collections
       // This is a bit more complex for a single useEffect, but we can nest snapshots or use a combined state
-      const mQuery = query(collection(db, 'meetings'), where('status', '==', 'pending'));
-      const lQuery = query(collection(db, 'leads'), where('isActive', '==', true));
+      
+      // If client, we should filter by their assignedClientId to avoid permission denied
+      const mQuery = isStaff 
+        ? query(collection(db, 'meetings'), where('status', '==', 'pending'))
+        : query(collection(db, 'meetings'), where('status', '==', 'pending'), where('clientId', '==', profile.assignedClientId || 'none'));
+
+      const lQuery = isStaff
+        ? query(collection(db, 'leads'), where('isActive', '==', true))
+        : query(collection(db, 'leads'), where('isActive', '==', true), where('clientId', '==', profile.assignedClientId || 'none'));
 
       const unsubM = onSnapshot(mQuery, (mSnap) => {
         const meetings = mSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -300,6 +333,8 @@ export default function App() {
           ...prev.filter(n => n.type !== 'meeting'),
           ...mNotifs
         ]);
+      }, (error) => {
+        console.error("Error fetching meeting notifications:", error);
       });
 
       const unsubL = onSnapshot(lQuery, (lSnap) => {
@@ -310,6 +345,8 @@ export default function App() {
           ...prev.filter(n => n.type !== 'follow_up'),
           ...fNotifs
         ]);
+      }, (error) => {
+        console.error("Error fetching lead notifications:", error);
       });
 
       return () => {
@@ -343,6 +380,8 @@ export default function App() {
         if (doc.exists()) {
           setSelectedClient({ id: doc.id, ...doc.data() } as Client);
         }
+      }, (error) => {
+        console.error("Error fetching selected client in App.tsx:", error);
       });
       return () => unsubscribe();
     } else {

@@ -117,21 +117,40 @@ export default function MeetingAgenda({ clientId, isDemoMode, profile, targetId,
       return () => window.removeEventListener('demo-meetings-updated', handleUpdate);
     }
 
-    const q = query(
-      collection(db, 'meetings'), 
-      where('clientId', '==', clientId),
-      orderBy('date', 'asc')
-    );
+    const isStaff = profile?.role === 'director' || 
+                    profile?.role === 'account_manager' || 
+                    profile?.email?.endsWith('@efectodigital.com.ar') || 
+                    profile?.email?.endsWith('@efectodigital.com');
+
+    const q = isStaff
+      ? query(
+          collection(db, 'meetings'), 
+          where('clientId', '==', clientId),
+          orderBy('date', 'asc')
+        )
+      : query(
+          collection(db, 'meetings'), 
+          where('clientId', '==', profile?.assignedClientId || 'none'),
+          orderBy('date', 'asc')
+        );
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setMeetings(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Meeting)));
       setLoading(false);
+    }, (error) => {
+      console.error("Error fetching meetings in Agenda:", error);
+      setLoading(false);
     });
 
     // Also fetch leads for the dropdown
-    const leadsQ = query(collection(db, 'leads'), where('clientId', '==', clientId));
+    const leadsQ = isStaff
+      ? query(collection(db, 'leads'), where('clientId', '==', clientId))
+      : query(collection(db, 'leads'), where('clientId', '==', profile?.assignedClientId || 'none'));
+
     const leadsUnsubscribe = onSnapshot(leadsQ, (snapshot) => {
       setLeads(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead)));
+    }, (error) => {
+      console.error("Error fetching leads in Agenda dropdown:", error);
     });
 
     return () => {

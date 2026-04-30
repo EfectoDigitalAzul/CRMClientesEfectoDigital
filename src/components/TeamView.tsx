@@ -253,6 +253,8 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
       if (profile && sortedUsers.some(u => u.uid === profile.uid) && !expandedMember) {
         setExpandedMember(profile.uid);
       }
+    }, (error) => {
+      console.error("Error fetching team in TeamView:", error);
     });
 
     const clientQuery = query(collection(db, 'clients'));
@@ -263,6 +265,9 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
         !c.name.toLowerCase().includes('mi primer lead') && 
         !c.name.toLowerCase().includes('lead flow')
       ));
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching clients in TeamView:", error);
       setLoading(false);
     });
 
@@ -290,6 +295,9 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
       );
       const unsub = onSnapshot(q, (snap) => {
         setHistoryNotes(snap.docs.map(d => ({ id: d.id, ...d.data() } as ClientHistoryNote)));
+        setLoadingHistory(false);
+      }, (error) => {
+        console.error("Error fetching history notes in TeamView:", error);
         setLoadingHistory(false);
       });
       return () => unsub();

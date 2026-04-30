@@ -102,10 +102,14 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
     }
     const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       setUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
+    }, (error) => {
+      console.error("Error fetching users in UserManagement:", error);
     });
 
     const unsubscribeClients = onSnapshot(query(collection(db, 'clients'), orderBy('name')), (snapshot) => {
       setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client)));
+    }, (error) => {
+      console.error("Error fetching clients in UserManagement:", error);
     });
 
     return () => {

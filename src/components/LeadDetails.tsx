@@ -266,11 +266,15 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
     const fuQuery = query(collection(db, 'leads', lead.id, 'followUps'), orderBy('date', 'desc'));
     const fuUnsubscribe = onSnapshot(fuQuery, (snapshot) => {
       setFollowUps(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowUp)));
+    }, (error) => {
+      console.error("Error fetching followUps in LeadDetails:", error);
     });
 
     const mQuery = query(collection(db, 'leads', lead.id, 'meetings'), orderBy('date', 'desc'));
     const mUnsubscribe = onSnapshot(mQuery, (snapshot) => {
       setMeetings(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Meeting)));
+    }, (error) => {
+      console.error("Error fetching meetings in LeadDetails:", error);
     });
 
     return () => {

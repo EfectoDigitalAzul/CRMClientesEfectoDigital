@@ -206,12 +206,20 @@ export default function DashboardStats({ profile, isDemoMode, clientId }: Dashbo
       const leadsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
       setLeads(leadsData);
       checkLoading();
+    }, (error) => {
+      console.error("Error fetching leads in Dashboard:", error);
+      toast.error("Error al cargar leads del tablero");
+      setLoading(false);
     });
 
     const unsubMeetings = onSnapshot(qMeetings, (snapshot) => {
       const meetingsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       setMeetings(meetingsData);
       checkLoading();
+    }, (error) => {
+      console.error("Error fetching meetings in Dashboard:", error);
+      toast.error("Error al cargar reuniones del tablero");
+      setLoading(false);
     });
 
     function checkLoading() {

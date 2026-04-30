@@ -70,7 +70,15 @@ export default function ClientSelector({ selectedClientId, onClientChange, isDem
       return () => window.removeEventListener('demo-clients-updated', loadClients);
     }
 
-    const q = query(collection(db, 'clients'), orderBy('createdAt', 'desc'));
+    const isStaff = profile?.role === 'director' || 
+                    profile?.role === 'account_manager' || 
+                    profile?.email?.endsWith('@efectodigital.com.ar') || 
+                    profile?.email?.endsWith('@efectodigital.com');
+
+    const q = isStaff 
+      ? query(collection(db, 'clients'), orderBy('createdAt', 'desc'))
+      : query(collection(db, 'clients'), where('id', '==', profile?.assignedClientId || 'none'));
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let clientsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client));
       
@@ -81,11 +89,6 @@ export default function ClientSelector({ selectedClientId, onClientChange, isDem
       );
 
       // Filter based on role - All team members with @efectodigital should ideally see all clients unless restricted
-      const isStaff = profile?.email?.endsWith('@efectodigital.com.ar') || 
-                      profile?.email?.endsWith('@efectodigital.com') ||
-                      profile?.role === 'director' || 
-                      profile?.role === 'account_manager';
-      
       if (profile?.role === 'client' && profile.assignedClientId) {
         clientsData = clientsData.filter(c => c.id === profile.assignedClientId);
       } else if (!isStaff && profile?.role === 'account_manager') {
@@ -98,6 +101,8 @@ export default function ClientSelector({ selectedClientId, onClientChange, isDem
       if (!selectedClientId && clientsData.length > 0) {
         onClientChange(clientsData[0].id);
       }
+    }, (error) => {
+      console.error("Error fetching clients in Selector:", error);
     });
 
     return () => unsubscribe();

@@ -673,25 +673,27 @@ export default function App() {
           foundProfile = demoUsers.find(u => (u.username?.toLowerCase() === lowerUsername || u.email?.toLowerCase() === lowerUsername) && u.password === credentials.password) || null;
         }
       } else {
-        // High-reliability search in Firestore
+        // High-reliability search in Firestore without listing (which is blocked by rules)
         try {
-          const usersRef = collection(db, 'users');
-          const querySnap = await getDocs(usersRef);
-          const allUsers = querySnap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile));
+          const tryLogin = async (id: string) => {
+            const snap = await getDoc(doc(db, 'users', id));
+            if (snap.exists()) {
+              const data = { uid: snap.id, ...snap.data() } as UserProfile;
+              if (data.password === credentials.password) return data;
+            }
+            return null;
+          };
+
+          // Try both staff and client prefixes
+          foundProfile = await tryLogin(`staff-${lowerUsername}`);
+          if (!foundProfile) foundProfile = await tryLogin(`client-${lowerUsername}`);
           
-          foundProfile = allUsers.find(u => 
-            (u.username?.toLowerCase() === lowerUsername || u.email?.toLowerCase() === lowerUsername) && 
-            u.password === credentials.password
-          ) || null;
+          // Fallback legacy prefixes
+          if (!foundProfile) foundProfile = await tryLogin(`u-${lowerUsername}`);
+          if (!foundProfile) foundProfile = await tryLogin(`u-staff-${lowerUsername}`);
+          
         } catch (err) {
           console.error("Auth search error:", err);
-          // Fallback to specific doc reads if search fails
-          let snap = await getDoc(doc(db, 'users', `u-${lowerUsername}`));
-          if (!snap.exists()) snap = await getDoc(doc(db, 'users', `u-staff-${lowerUsername}`));
-          if (snap.exists()) {
-            const data = { uid: snap.id, ...snap.data() } as UserProfile;
-            if (data.password === credentials.password) foundProfile = data;
-          }
         }
       }
 

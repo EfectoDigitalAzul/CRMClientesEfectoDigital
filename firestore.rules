@@ -31,7 +31,12 @@ service cloud.firestore {
     }
 
     function isDirector() {
-      return hasRole('director');
+      return hasRole('director') || (
+        isSignedIn() && 
+        request.auth.token.email_verified == true && 
+        (request.auth.token.email == 'azul@efectodigital.com.ar' || 
+         request.auth.token.email == 'nazareno@efectodigital.com.ar')
+      );
     }
 
     function isAM() {

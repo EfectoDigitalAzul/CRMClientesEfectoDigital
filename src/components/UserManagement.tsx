@@ -189,11 +189,12 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
     }
     setLoading(true);
     try {
+      const isClient = newUser.role === 'client';
       const userToCreate: UserProfile = {
-        uid: newUser.role === 'client' ? `u-${lowerUsername}` : `u-staff-${lowerUsername || Math.random().toString(36).substr(2, 5)}`,
+        uid: isClient ? `client-${lowerUsername}` : `staff-${lowerUsername || Math.random().toString(36).substr(2, 5)}`,
         username: lowerUsername,
         password: newUser.password,
-        email: lowerEmail || (newUser.role === 'client' ? `${lowerUsername}@cliente.efectodigital.com.ar` : ''),
+        email: lowerEmail || (isClient ? `${lowerUsername}@cliente.efectodigital.com.ar` : ''),
         displayName: newUser.displayName,
         role: newUser.role,
         assignedClientId: newUser.assignedClientId || undefined,
@@ -605,27 +606,31 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
               />
             </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="email" className="text-xs uppercase font-bold text-muted-foreground">Email Personal (@efectodigital)</Label>
-                <Input 
-                  id="email" 
-                  placeholder="ejemplo@efectodigital.com.ar" 
-                  value={newUser.email}
-                  onChange={e => setNewUser({...newUser, email: e.target.value})}
-                  className="bg-muted border-border"
-                />
-              </div>
+        {newUser.role !== 'client' && (
+          <div className="grid gap-2">
+            <Label htmlFor="email" className="text-xs uppercase font-bold text-muted-foreground">Email Personal (@efectodigital)</Label>
+            <Input 
+              id="email" 
+              placeholder="ejemplo@efectodigital.com.ar" 
+              value={newUser.email}
+              onChange={e => setNewUser({...newUser, email: e.target.value})}
+              className="bg-muted border-border"
+            />
+          </div>
+        )}
 
-            <div className="grid gap-2">
-              <Label htmlFor="name" className="text-xs uppercase font-bold text-muted-foreground">Nombre para mostrar / Empresa</Label>
-              <Input 
-                id="name" 
-                placeholder="Ej: Mariana Rodríguez" 
-                value={newUser.displayName}
-                onChange={e => setNewUser({...newUser, displayName: e.target.value})}
-                className="bg-muted border-border"
-              />
-            </div>
+        <div className="grid gap-2">
+          <Label htmlFor="name" className="text-xs uppercase font-bold text-muted-foreground">
+            {newUser.role === 'client' ? 'Nombre del Cliente / Empresa' : 'Nombre Completo'}
+          </Label>
+          <Input 
+            id="name" 
+            placeholder={newUser.role === 'client' ? "Ej: Empresa S.A." : "Ej: Mariana Rodríguez"} 
+            value={newUser.displayName}
+            onChange={e => setNewUser({...newUser, displayName: e.target.value})}
+            className="bg-muted border-border"
+          />
+        </div>
             {newUser.role === 'client' && (
               <div className="grid gap-2">
                 <Label className="text-xs uppercase font-bold text-muted-foreground">Asignar Proyecto</Label>

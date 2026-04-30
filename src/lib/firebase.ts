@@ -25,17 +25,19 @@ const config = {
   firestoreDatabaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID
 };
 
-// This is a local-only hack for AI Studio environment
-// If the env vars are missing, we try to use the fallback config if available
-const finalConfig = (config.apiKey && config.apiKey !== "PLACEHOLDER") ? config : firebaseConfig;
+// This is a robust check for Firebase configuration
+// Priority: 1. Environment Variables, 2. Hardcoded Fallback (for easy Vercel deploy)
+const isEnvConfigured = config.apiKey && config.apiKey !== "PLACEHOLDER" && config.apiKey !== "";
+const finalConfig = isEnvConfigured ? config : firebaseConfig;
 
-export const isFirebaseConfigured = finalConfig && finalConfig.apiKey && finalConfig.apiKey !== "PLACEHOLDER" && finalConfig.apiKey !== "dummy-key-for-init";
+export const isFirebaseConfigured = finalConfig && finalConfig.apiKey && finalConfig.apiKey !== "PLACEHOLDER";
 
 // Initialize with safe fallback if not configured
 const app = initializeApp(isFirebaseConfigured ? finalConfig : { ...firebaseConfig, apiKey: "dummy-key-for-init" });
 export const auth = getAuth(app);
-// @ts-ignore - databaseId may exist in finalConfig
-export const db = getFirestore(app, finalConfig.databaseId || finalConfig.firestoreDatabaseId);
+// Support both standard and AI Studio specific database ID fields
+// @ts-ignore
+export const db = getFirestore(app, finalConfig.firestoreDatabaseId || finalConfig.databaseId || "default");
 export const googleProvider = new GoogleAuthProvider();
 
 export const loginWithGoogle = () => signInWithPopup(auth, googleProvider);

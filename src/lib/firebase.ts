@@ -2,8 +2,8 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, getDoc, updateDoc, addDoc, query, where, onSnapshot, orderBy, Timestamp } from 'firebase/firestore';
 
-// Configuración de Firebase - Usamos los datos proporcionados por el usuario
-const firebaseConfig = {
+// Configuración de Firebase - Usamos los datos proporcionados por el usuario como base sólida
+const fallbackConfig = {
   apiKey: "AIzaSyDPF3HzPCU-YsuOW3X-ei_oUPpgCBwZsd4",
   authDomain: "ai-studio-applet-webapp-168f2.firebaseapp.com",
   projectId: "ai-studio-applet-webapp-168f2",
@@ -13,21 +13,22 @@ const firebaseConfig = {
   databaseId: "ai-studio-b25dd903-6073-4870-8eb5-7ce9c93bd9f4"
 };
 
-// Intentamos leer de variables de entorno si existen (opcional, para flexibilidad)
-const envConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  databaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID
+// Función para obtener valor de env o fallback si es inválido
+const getVal = (envVal: string | undefined, fallback: string) => {
+  return (envVal && envVal !== "PLACEHOLDER" && envVal !== "") ? envVal : fallback;
 };
 
-// Usamos las variables de entorno si están presentes y tienen datos reales,
-// de lo contrario usamos el objeto hardcodeado de arriba.
-const isEnvValid = envConfig.apiKey && envConfig.apiKey !== "PLACEHOLDER" && envConfig.apiKey !== "";
-const finalConfig = isEnvValid ? { ...firebaseConfig, ...envConfig } : firebaseConfig;
+const finalConfig = {
+  apiKey: getVal(import.meta.env.VITE_FIREBASE_API_KEY, fallbackConfig.apiKey),
+  authDomain: getVal(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN, fallbackConfig.authDomain),
+  projectId: getVal(import.meta.env.VITE_FIREBASE_PROJECT_ID, fallbackConfig.projectId),
+  storageBucket: getVal(import.meta.env.VITE_FIREBASE_STORAGE_BUCKET, fallbackConfig.storageBucket),
+  messagingSenderId: getVal(import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID, fallbackConfig.messagingSenderId),
+  appId: getVal(import.meta.env.VITE_FIREBASE_APP_ID, fallbackConfig.appId),
+  databaseId: getVal(import.meta.env.VITE_FIREBASE_DATABASE_ID, fallbackConfig.databaseId)
+};
+
+console.log("Firebase Config Initialized with Project ID:", finalConfig.projectId);
 
 export const isFirebaseConfigured = !!finalConfig.apiKey && finalConfig.apiKey !== "PLACEHOLDER";
 

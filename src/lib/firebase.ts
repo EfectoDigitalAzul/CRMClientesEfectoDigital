@@ -1,41 +1,35 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, getDoc, updateDoc, addDoc, query, where, onSnapshot, orderBy, Timestamp } from 'firebase/firestore';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, signInAnonymously } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, getDoc, updateDoc, addDoc, query, where, getDocs, onSnapshot, orderBy, Timestamp } from 'firebase/firestore';
+import firebaseConfig from '../../firebase-applet-config.json';
 
-// Configuración de Firebase - Usamos los datos proporcionados por el usuario como base sólida
-const fallbackConfig = {
-  apiKey: "AIzaSyDPF3HzPCU-YsuOW3X-ei_oUPpgCBwZsd4",
-  authDomain: "ai-studio-applet-webapp-168f2.firebaseapp.com",
-  projectId: "ai-studio-applet-webapp-168f2",
-  storageBucket: "ai-studio-applet-webapp-168f2.firebasestorage.app",
-  messagingSenderId: "30932368156",
-  appId: "1:30932368156:web:4da280a0493af457c198d9",
-  databaseId: "ai-studio-b25dd903-6073-4870-8eb5-7ce9c93bd9f4"
-};
-
-// Función para obtener valor de env o fallback si es inválido
-const getVal = (envVal: string | undefined, fallback: string) => {
-  return (envVal && envVal !== "PLACEHOLDER" && envVal !== "") ? envVal : fallback;
-};
-
+// Configuración de Firebase
 const finalConfig = {
-  apiKey: getVal(import.meta.env.VITE_FIREBASE_API_KEY, fallbackConfig.apiKey),
-  authDomain: getVal(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN, fallbackConfig.authDomain),
-  projectId: getVal(import.meta.env.VITE_FIREBASE_PROJECT_ID, fallbackConfig.projectId),
-  storageBucket: getVal(import.meta.env.VITE_FIREBASE_STORAGE_BUCKET, fallbackConfig.storageBucket),
-  messagingSenderId: getVal(import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID, fallbackConfig.messagingSenderId),
-  appId: getVal(import.meta.env.VITE_FIREBASE_APP_ID, fallbackConfig.appId),
-  databaseId: getVal(import.meta.env.VITE_FIREBASE_DATABASE_ID, fallbackConfig.databaseId)
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseConfig.apiKey,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfig.authDomain,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseConfig.projectId,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfig.storageBucket,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfig.messagingSenderId,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || firebaseConfig.appId,
+  databaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID || firebaseConfig.firestoreDatabaseId
 };
 
-console.log("Firebase Config Initialized with Project ID:", finalConfig.projectId);
+console.log("🚀 CRM Conectado a Firebase!");
+console.log("Proyecto:", finalConfig.projectId);
+console.log("Base de datos:", finalConfig.databaseId || "(default)");
 
 export const isFirebaseConfigured = !!finalConfig.apiKey && finalConfig.apiKey !== "PLACEHOLDER";
 
 // Inicialización de Firebase
 const app = initializeApp(finalConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app, finalConfig.databaseId);
+
+// ID de la base de datos
+const dbId = finalConfig.databaseId || "(default)";
+export const db = getFirestore(app, dbId);
+
+console.log("🔥 Firestore instanciado con DB:", dbId);
+
 export const googleProvider = new GoogleAuthProvider();
 
 export const loginWithGoogle = async () => {
@@ -50,6 +44,18 @@ export const loginWithGoogle = async () => {
     throw error;
   }
 };
+
+export const ensureAuth = async () => {
+  if (!auth.currentUser) {
+    try {
+      await signInAnonymously(auth);
+      console.log("🔑 Sesión anónima iniciada para operaciones básicas");
+    } catch (e) {
+      console.error("Error en sesión anónima:", e);
+    }
+  }
+};
+
 export const logout = () => signOut(auth);
 
 // Error handling helper

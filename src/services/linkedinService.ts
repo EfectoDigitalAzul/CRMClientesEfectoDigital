@@ -1,7 +1,30 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
+// Safe retrieval of API key
+const getApiKey = () => {
+  try {
+    // @ts-ignore
+    const viteKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (viteKey) return viteKey;
+    
+    // @ts-ignore
+    if (typeof process !== 'undefined' && process.env) {
+      const pKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+      if (pKey) return pKey;
+    }
+  } catch (e) {
+    console.warn("Error accessing environment variables:", e);
+  }
+  return "";
+};
+
+const apiKey = getApiKey();
+if (!apiKey) {
+  console.warn("⚠️ Clave de IA no detectada. Las funciones de extracción no funcionarán. Asegúrate de configurar VITE_GEMINI_API_KEY.");
+}
+
 const ai = new GoogleGenAI({ 
-  apiKey: process.env.GEMINI_API_KEY 
+  apiKey: apiKey || "" 
 });
 
 // Timeout helper
@@ -19,6 +42,11 @@ const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function scrapeLinkedInProfile(url: string, retryCount = 0): Promise<any> {
   const MAX_RETRIES = 2;
+  
+  if (!apiKey) {
+    console.error("No se puede extraer: GEMINI_API_KEY faltante");
+    return null;
+  }
   
   try {
     const fetchProfile = async () => {
@@ -115,9 +143,15 @@ export async function scrapeLinkedInProfile(url: string, retryCount = 0): Promis
 }
 
 export async function analyzeLinkedInPDF(base64Data: string): Promise<any> {
+  if (!apiKey) {
+    console.error("No se puede analizar PDF: GEMINI_API_KEY faltante");
+    return null;
+  }
+
   try {
+    console.log("Iniciando análisis de PDF con Gemini 1.5 Flash...");
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-1.5-flash",
       contents: [
         {
           inlineData: {
@@ -164,7 +198,19 @@ export async function analyzeLinkedInPDF(base64Data: string): Promise<any> {
     const text = response.text;
     if (!text) return null;
     
-    return JSON.parse(text);
+    console.log("Respuesta de Gemini recibida, procesando...");
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      console.warn("Error parseando JSON directo, intentando extracción...", e);
+      const firstBrace = text.indexOf('{');
+      const lastBrace = text.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1) {
+        const jsonContent = text.substring(firstBrace, lastBrace + 1);
+        return JSON.parse(jsonContent);
+      }
+      throw e;
+    }
   } catch (error) {
     console.error("Error analyzing PDF:", error);
     return null;

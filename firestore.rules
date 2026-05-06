@@ -80,7 +80,7 @@ service cloud.firestore {
     // User Profiles
     match /users/{userId} {
       allow get: if true; // Enabled for custom username/password login check
-      allow list: if isSignedIn();
+      allow list: if isSignedIn(); // Permite búsqueda de perfil si hay sesión (incluye anónima)
       allow create: if isDirector() || (isSignedIn() && request.auth.uid == userId && isStaffDomain());
       allow update: if isDirector() || (isSignedIn() && request.auth.uid == userId);
       allow delete: if isDirector();

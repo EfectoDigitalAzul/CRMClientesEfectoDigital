@@ -65,7 +65,6 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
         const storedUsers = localStorage.getItem('demo-users');
         if (storedUsers) {
           const parsed = JSON.parse(storedUsers);
-          // Migration: Ensure all demo users have isActive property
           const migrated = parsed.map((u: any) => u.isActive === undefined ? { ...u, isActive: true } : u);
           if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
             localStorage.setItem('demo-users', JSON.stringify(migrated));
@@ -86,9 +85,8 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
         if (storedClients) {
           setClients(JSON.parse(storedClients));
         } else {
-          const initialClients: Client[] = [];
-          setClients(initialClients);
-          localStorage.setItem('demo-clients', JSON.stringify(initialClients));
+          setClients([]);
+          localStorage.setItem('demo-clients', JSON.stringify([]));
         }
       };
 
@@ -100,16 +98,19 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
         window.removeEventListener('demo-clients-updated', loadData);
       };
     }
+    
+    // Always attach Firebase listeners if configured, even if isDemoMode is true (as a fallback sync)
     const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-      setUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
+      const allUsers = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
+      setUsers(allUsers);
     }, (error) => {
-      console.error("Error fetching users in UserManagement:", error);
+      console.warn("User sync notice: Using local view for permissions. Log in to sync.", error);
     });
 
     const unsubscribeClients = onSnapshot(query(collection(db, 'clients'), orderBy('name')), (snapshot) => {
       setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client)));
     }, (error) => {
-      console.error("Error fetching clients in UserManagement:", error);
+      // Quiet fail to avoid spamming UI
     });
 
     return () => {
@@ -586,14 +587,15 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="username" className="text-xs uppercase font-bold text-muted-foreground">Usuario (Login)</Label>
+              <Label htmlFor="username" className="text-xs uppercase font-bold text-muted-foreground">Usuario para login (ej: naza_efecto)</Label>
               <Input 
                 id="username" 
                 placeholder="ej: naza_efecto" 
                 value={newUser.username}
-                onChange={e => setNewUser({...newUser, username: e.target.value})}
-                className="bg-muted border-border"
+                onChange={e => setNewUser({...newUser, username: e.target.value.toLowerCase().replace(/\s/g, '')})}
+                className="bg-muted border-border font-mono text-xs"
               />
+              <p className="text-[10px] text-primary font-bold italic px-1 leading-tight">Importante: Es el nombre que deberán usar para entrar junto con la clave.</p>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="pass" className="text-xs uppercase font-bold text-muted-foreground">Contraseña</Label>

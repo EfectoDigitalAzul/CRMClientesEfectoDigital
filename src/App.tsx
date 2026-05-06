@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { auth, db, loginWithGoogle, logout, isFirebaseConfigured } from './lib/firebase';
+import { auth, db, loginWithGoogle, logout, isFirebaseConfigured, ensureAuth } from './lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot, collection, query, where, orderBy, getDocs, updateDoc, deleteDoc } from 'firebase/firestore';
 import { UserProfile, Lead, UserRole, Client, Meeting } from './types';
@@ -612,7 +612,7 @@ export default function App() {
       createdAt: new Date().toISOString()
     };
     setProfile(demoProfile);
-    toast.warning("SISTEMA EN MODO DEMO: Los datos que ingreses NO se compartirán con el equipo. Usa el LOGIN DE GOOGLE para trabajar con datos reales.", { duration: 8000 });
+    toast.warning("ATENCIÓN: Estás en Modo Demo local. Los datos no se guardarán en la nube. ¡Recomendamos usar Login de Google o Usuario Real!", { duration: 8000 });
   };
 
   if (loading && isFirebaseConfigured) {
@@ -673,24 +673,48 @@ export default function App() {
           foundProfile = demoUsers.find(u => (u.username?.toLowerCase() === lowerUsername || u.email?.toLowerCase() === lowerUsername) && u.password === credentials.password) || null;
         }
       } else {
-        // High-reliability search in Firestore without listing (which is blocked by rules)
+        // High-reliability search in Firestore
         try {
-          const tryLogin = async (id: string) => {
-            const snap = await getDoc(doc(db, 'users', id));
-            if (snap.exists()) {
-              const data = { uid: snap.id, ...snap.data() } as UserProfile;
-              if (data.password === credentials.password) return data;
-            }
-            return null;
-          };
+          await ensureAuth();
+          // Try all possible prefix combinations for maximum compatibility
+          const idsToTry = [
+            `staff-${lowerUsername}`,
+            `client-${lowerUsername}`,
+            lowerUsername,
+            `u-${lowerUsername}`,
+            `u-staff-${lowerUsername}`
+          ];
 
-          // Try both staff and client prefixes
-          foundProfile = await tryLogin(`staff-${lowerUsername}`);
-          if (!foundProfile) foundProfile = await tryLogin(`client-${lowerUsername}`);
-          
-          // Fallback legacy prefixes
-          if (!foundProfile) foundProfile = await tryLogin(`u-${lowerUsername}`);
-          if (!foundProfile) foundProfile = await tryLogin(`u-staff-${lowerUsername}`);
+          for (const id of idsToTry) {
+            try {
+              const snap = await getDoc(doc(db, 'users', id));
+              if (snap.exists()) {
+                const data = { uid: snap.id, ...snap.data() } as UserProfile;
+                if (data.password === credentials.password) {
+                  foundProfile = data;
+                  break;
+                }
+              }
+            } catch (readErr) {
+              console.warn(`Retry login with ID ${id} failed:`, readErr);
+            }
+          }
+
+          // Fallback final: Búsqueda por query de email si lo que ingresó parece un email y no se encontró por ID
+          if (!foundProfile && lowerUsername.includes('@')) {
+            try {
+              const qEmail = query(collection(db, 'users'), where('email', '==', lowerUsername));
+              const snapEmail = await getDocs(qEmail);
+              if (!snapEmail.empty) {
+                const data = { uid: snapEmail.docs[0].id, ...snapEmail.docs[0].data() } as UserProfile;
+                if (data.password === credentials.password) {
+                  foundProfile = data;
+                }
+              }
+            } catch (queryErr) {
+              console.warn("Email query login failed:", queryErr);
+            }
+          }
           
         } catch (err) {
           console.error("Auth search error:", err);
@@ -701,30 +725,30 @@ export default function App() {
         if (!foundProfile.isActive) {
           toast.error("Tu cuenta está bloqueada");
         } else {
-          if (!isFirebaseConfigured) {
-            setIsDemoMode(true);
-          }
           setProfile(foundProfile);
           toast.success(`Bienvenido, ${foundProfile.displayName}`);
         }
-      } else if (!isDemoMode && isFirebaseConfigured) {
-        // If not found in demo, try a query by username in Firebase
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('username', '==', lowerUsername), where('password', '==', credentials.password));
-        const querySnap = await getDocs(q);
-        if (!querySnap.empty) {
-          const data = { uid: querySnap.docs[0].id, ...querySnap.docs[0].data() } as UserProfile;
-          if (data.isActive) {
-            setProfile(data);
-            toast.success(`Bienvenido, ${data.displayName}`);
-          } else {
-            toast.error("Tu cuenta está bloqueada");
-          }
-        } else {
-          toast.error("Usuario o contraseña incorrectos");
-        }
       } else {
-        toast.error("Usuario o contraseña incorrectos");
+        // Final fallback search directly by username field
+        try {
+          const usersRef = collection(db, 'users');
+          const q = query(usersRef, where('username', '==', lowerUsername), where('password', '==', credentials.password));
+          const querySnap = await getDocs(q);
+          if (!querySnap.empty) {
+            const data = { uid: querySnap.docs[0].id, ...querySnap.docs[0].data() } as UserProfile;
+            if (data.isActive) {
+              setProfile(data);
+              toast.success(`Bienvenido, ${data.displayName}`);
+            } else {
+              toast.error("Tu cuenta está bloqueada");
+            }
+          } else {
+            toast.error("Usuario o contraseña incorrectos. Verifica tus credenciales.");
+          }
+        } catch (finalErr) {
+          toast.error("Error al conectar con la base de datos de usuarios.");
+          console.error(finalErr);
+        }
       }
     } catch (error) {
       toast.error("Error al iniciar sesión");
@@ -742,7 +766,7 @@ export default function App() {
 
         <div className="w-full max-w-md space-y-8 relative z-10">
           <div className="text-center space-y-4">
-            <div className="inline-flex flex-col items-center mb-4 cursor-pointer" onClick={enterDemoMode}>
+            <div className="inline-flex flex-col items-center mb-4">
               <span className="text-5xl font-black leading-none tracking-tighter text-white font-montserrat">EFECTO</span>
               <span className="text-sm font-black text-primary tracking-[0.4em] font-montserrat ml-2">DIGITAL</span>
             </div>
@@ -827,7 +851,13 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen w-screen bg-background overflow-hidden">
+    <div className="flex flex-col h-screen w-screen bg-background overflow-hidden">
+      {isDemoMode && (
+        <div className="bg-destructive text-destructive-foreground py-1.5 px-4 text-[10px] font-black uppercase tracking-[0.2em] text-center z-[100] animate-pulse border-b border-destructive-foreground/20">
+           ⚠️ MODO DEMO ACTIVO: LOS DATOS NO SE GUARDAN EN LA NUBE Y NO SON VISTOS POR EL RESTO DEL EQUIPO ⚠️
+        </div>
+      )}
+      <div className="flex flex-1 overflow-hidden relative">
       {/* Mobile Sidebar Overlay */}
       {isMobileMenuOpen && (
         <div 
@@ -1173,6 +1203,7 @@ export default function App() {
         />
       )}
       <Toaster position="top-right" theme={theme} />
+      </div>
     </div>
   );
 }

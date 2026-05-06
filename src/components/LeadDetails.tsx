@@ -870,9 +870,7 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
           <section className="space-y-6">
             <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Historial de Seguimiento</h3>
             <div className="space-y-4">
-              {followUps
-                .filter(fu => fu.authorId === profile?.uid)
-                .map((fu) => (
+              {followUps.map((fu) => (
                   <div key={fu.id} className="relative pl-6 border-l-2 border-primary/20 py-1">
                     <div className="absolute -left-[5px] top-2 h-2 w-2 rounded-full bg-primary"></div>
                     <div className="flex items-center justify-between mb-1">

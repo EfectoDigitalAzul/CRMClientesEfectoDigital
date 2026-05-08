@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, onSnapshot, query, where, addDoc, deleteDoc, doc, updateDoc, orderBy } from 'firebase/firestore';
 import { UserProfile, Client, ClientHistoryNote, Attachment } from '../types';
 import { Card, CardContent } from './ui/card';
@@ -253,6 +253,8 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
       if (profile && sortedUsers.some(u => u.uid === profile.uid) && !expandedMember) {
         setExpandedMember(profile.uid);
       }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'users');
     });
 
     const clientQuery = query(collection(db, 'clients'));
@@ -264,6 +266,8 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
         !c.name.toLowerCase().includes('lead flow')
       ));
       setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'clients');
     });
 
     return () => {
@@ -291,6 +295,8 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
       const unsub = onSnapshot(q, (snap) => {
         setHistoryNotes(snap.docs.map(d => ({ id: d.id, ...d.data() } as ClientHistoryNote)));
         setLoadingHistory(false);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, `clients/${editingClient.id}/historyNotes`);
       });
       return () => unsub();
     }

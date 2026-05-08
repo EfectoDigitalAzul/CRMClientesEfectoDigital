@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, onSnapshot, query, orderBy, doc, updateDoc, deleteDoc, where, addDoc, writeBatch } from 'firebase/firestore';
 import { Lead, UserProfile, LeadStatus } from '../types';
 import { 
@@ -212,6 +212,8 @@ export default function LeadList({ profile, isDemoMode, clientId, targetId, onTa
         !l.name.toLowerCase().includes('mi primer lead') && 
         !l.name.toLowerCase().includes('lead follow')
       ));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'leads');
     });
 
     return () => unsubscribe();

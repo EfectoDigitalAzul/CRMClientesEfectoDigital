@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { auth, db, loginWithGoogle, logout, isFirebaseConfigured } from './lib/firebase';
+import { auth, db, loginWithGoogle, logout, isFirebaseConfigured, handleFirestoreError, OperationType } from './lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot, collection, query, where, orderBy, getDocs, updateDoc, deleteDoc } from 'firebase/firestore';
 import { UserProfile, Lead, UserRole, Client, Meeting } from './types';
@@ -128,17 +128,21 @@ export default function App() {
       window.addEventListener('demo-clients-updated', updateClients);
       return () => window.removeEventListener('demo-clients-updated', updateClients);
     } else {
-      const unsubscribe = onSnapshot(collection(db, 'clients'), (snapshot) => {
+      if (!user) return;
+      const path = 'clients';
+      const unsubscribe = onSnapshot(collection(db, path), (snapshot) => {
         const allClients = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client));
         // Explicitly filter out the unwanted placeholder if it exists in Firestore
         setClients(allClients.filter(c => 
           !c.name.toLowerCase().includes('mi primer lead') && 
           !c.name.toLowerCase().includes('lead flow')
         ));
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, path);
       });
       return () => unsubscribe();
     }
-  }, [isDemoMode]);
+  }, [isDemoMode, user]);
 
   useEffect(() => {
     if (isDemoMode) {
@@ -171,26 +175,32 @@ export default function App() {
                       user?.email?.endsWith('@efectodigital.com.ar') ||
                       user?.email?.endsWith('@efectodigital.com');
       
-      if (!selectedClientId && !isStaff) {
+      if (!user || (!selectedClientId && !isStaff)) {
         setLeads([]);
         setMeetings([]);
         return;
       }
 
+      const lPath = 'leads';
+      const mPath = 'meetings';
       const lQuery = selectedClientId 
-        ? query(collection(db, 'leads'), where('clientId', '==', selectedClientId))
-        : query(collection(db, 'leads'));
+        ? query(collection(db, lPath), where('clientId', '==', selectedClientId))
+        : query(collection(db, lPath));
         
       const mQuery = selectedClientId
-        ? query(collection(db, 'meetings'), where('clientId', '==', selectedClientId))
-        : query(collection(db, 'meetings'));
+        ? query(collection(db, mPath), where('clientId', '==', selectedClientId))
+        : query(collection(db, mPath));
 
       const unsubL = onSnapshot(lQuery, (snap) => {
         setLeads(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead)));
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, lPath);
       });
 
       const unsubM = onSnapshot(mQuery, (snap) => {
         setMeetings(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, mPath);
       });
 
       return () => {
@@ -198,7 +208,7 @@ export default function App() {
         unsubM();
       };
     }
-  }, [selectedClientId, isDemoMode, profile?.role]);
+  }, [selectedClientId, isDemoMode, profile?.role, user]);
 
   useEffect(() => {
     if (!profile || clients.length === 0) return;
@@ -291,9 +301,12 @@ export default function App() {
       }
     } else {
       // For real mode, we would need to listen to both collections
-      // This is a bit more complex for a single useEffect, but we can nest snapshots or use a combined state
-      const mQuery = query(collection(db, 'meetings'), where('status', '==', 'pending'));
-      const lQuery = query(collection(db, 'leads'), where('isActive', '==', true));
+      if (!user || !profile) return;
+
+      const mPath = 'meetings';
+      const lPath = 'leads';
+      const mQuery = query(collection(db, mPath), where('status', '==', 'pending'));
+      const lQuery = query(collection(db, lPath), where('isActive', '==', true));
 
       const unsubM = onSnapshot(mQuery, (mSnap) => {
         const meetings = mSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -304,6 +317,8 @@ export default function App() {
           ...prev.filter(n => n.type !== 'meeting'),
           ...mNotifs
         ]);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, mPath);
       });
 
       const unsubL = onSnapshot(lQuery, (lSnap) => {
@@ -314,6 +329,8 @@ export default function App() {
           ...prev.filter(n => n.type !== 'follow_up'),
           ...fNotifs
         ]);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, lPath);
       });
 
       return () => {
@@ -343,10 +360,14 @@ export default function App() {
     }
     
     if (selectedClientId) {
+      if (!user) return;
+      const path = `clients/${selectedClientId}`;
       const unsubscribe = onSnapshot(doc(db, 'clients', selectedClientId), (doc) => {
         if (doc.exists()) {
           setSelectedClient({ id: doc.id, ...doc.data() } as Client);
         }
+      }, (error) => {
+        handleFirestoreError(error, OperationType.GET, path);
       });
       return () => unsubscribe();
     } else {

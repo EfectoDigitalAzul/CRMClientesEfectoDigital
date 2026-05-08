@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db, isFirebaseConfigured } from '../lib/firebase';
+import { db, isFirebaseConfigured, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, onSnapshot, query, where, addDoc, getDocs } from 'firebase/firestore';
 import { Lead, UserProfile, Meeting } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -206,12 +206,16 @@ export default function DashboardStats({ profile, isDemoMode, clientId }: Dashbo
       const leadsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
       setLeads(leadsData);
       checkLoading();
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'leads');
     });
 
     const unsubMeetings = onSnapshot(qMeetings, (snapshot) => {
       const meetingsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       setMeetings(meetingsData);
       checkLoading();
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'meetings');
     });
 
     function checkLoading() {

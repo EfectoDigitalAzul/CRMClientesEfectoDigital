@@ -15,8 +15,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
     function isStaffDomain() {
-      return isSignedIn() && (
+      return isEmailVerified() && (
         request.auth.token.email.endsWith('@efectodigital.com.ar') || 
         request.auth.token.email.endsWith('@efectodigital.com')
       );
@@ -26,8 +30,12 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
+    function userExists() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
     function hasRole(role) {
-      return isSignedIn() && getUserData().role == role;
+      return isEmailVerified() && userExists() && getUserData().role == role;
     }
 
     function isDirector() {
@@ -44,6 +52,10 @@ service cloud.firestore {
 
     function isCommercial() {
       return hasRole('commercial');
+    }
+    
+    function isStaffMember() {
+      return isStaffDomain() || isDirector() || isAM() || isSetter() || isCommercial();
     }
 
     function isOwner(userId) {
@@ -80,11 +92,8 @@ service cloud.firestore {
 
     // User Profiles
     match /users/{userId} {
-      allow get: if true; // Enabled for custom username/password login check
+      allow get: if true;
       allow list: if isSignedIn();
-      // Allow directors to create any user. 
-      // Allow users with staff domain to create their own profile.
-      // Allow AMs/Setters to create client profiles.
       allow create: if isDirector() || (isSignedIn() && request.auth.uid == userId && isStaffDomain()) || (
         (isAM() || isSetter()) && 
         request.resource.data.role == 'client' && 
@@ -102,11 +111,8 @@ service cloud.firestore {
     // Clients
     match /clients/{clientId} {
       function canAccessClient(clientData) {
-        return isDirector() || 
-               isAM() ||
-               isSetter() ||
-               isStaffDomain() ||
-               (getUserData().role == 'client' && getUserData().assignedClientId == clientId);
+        return isStaffMember() ||
+               (isEmailVerified() && userExists() && getUserData().role == 'client' && getUserData().assignedClientId == clientId);
       }
 
       allow read: if isSignedIn() && canAccessClient(resource.data);
@@ -115,8 +121,8 @@ service cloud.firestore {
       allow delete: if isDirector();
 
       match /historyNotes/{noteId} {
-        allow read: if isSignedIn() && (isDirector() || isAM() || isSetter() || isCommercial());
-        allow create: if isSignedIn() && (isDirector() || isAM() || isSetter() || isCommercial());
+        allow read: if isSignedIn() && isStaffMember();
+        allow create: if isSignedIn() && isStaffMember();
         allow update: if isDirector() || (isSignedIn() && resource.data.authorId == request.auth.uid);
         allow delete: if isDirector();
       }
@@ -129,12 +135,8 @@ service cloud.firestore {
       }
 
       function canAccessLead(leadData) {
-        let client = getClient(leadData.clientId);
-        return isDirector() || 
-               isAM() ||
-               isSetter() ||
-               isStaffDomain() ||
-               (getUserData().role == 'client' && getUserData().assignedClientId == leadData.clientId);
+        return isStaffMember() ||
+               (isEmailVerified() && userExists() && getUserData().role == 'client' && getUserData().assignedClientId == leadData.clientId);
       }
 
       allow read: if isSignedIn() && canAccessLead(resource.data);

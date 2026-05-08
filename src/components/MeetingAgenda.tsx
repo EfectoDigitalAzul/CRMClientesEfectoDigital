@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '@/lib/firebase';
+import { db, handleFirestoreError, OperationType } from '@/lib/firebase';
 import { collection, onSnapshot, query, where, orderBy, addDoc, updateDoc, doc } from 'firebase/firestore';
 import { Meeting, Lead, UserProfile, LeadStatus } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -126,12 +126,16 @@ export default function MeetingAgenda({ clientId, isDemoMode, profile, targetId,
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setMeetings(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Meeting)));
       setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'meetings');
     });
 
     // Also fetch leads for the dropdown
     const leadsQ = query(collection(db, 'leads'), where('clientId', '==', clientId));
     const leadsUnsubscribe = onSnapshot(leadsQ, (snapshot) => {
       setLeads(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'leads');
     });
 
     return () => {

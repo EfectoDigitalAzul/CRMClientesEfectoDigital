@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db, auth } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { doc, updateDoc, collection, addDoc, onSnapshot, query, orderBy, getDoc } from 'firebase/firestore';
 import { Lead, UserProfile, LeadStatus, FollowUp, Meeting, Client } from '../types';
 import { 
@@ -266,11 +266,15 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
     const fuQuery = query(collection(db, 'leads', lead.id, 'followUps'), orderBy('date', 'desc'));
     const fuUnsubscribe = onSnapshot(fuQuery, (snapshot) => {
       setFollowUps(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowUp)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `leads/${lead.id}/followUps`);
     });
 
     const mQuery = query(collection(db, 'leads', lead.id, 'meetings'), orderBy('date', 'desc'));
     const mUnsubscribe = onSnapshot(mQuery, (snapshot) => {
       setMeetings(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Meeting)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `leads/${lead.id}/meetings`);
     });
 
     return () => {

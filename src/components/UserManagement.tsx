@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, onSnapshot, doc, updateDoc, query, orderBy, deleteDoc, setDoc } from 'firebase/firestore';
 import { UserProfile, UserRole, Client } from '../types';
 import { 
@@ -103,10 +103,14 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
     }
     const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       setUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'users');
     });
 
     const unsubscribeClients = onSnapshot(query(collection(db, 'clients'), orderBy('name')), (snapshot) => {
       setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'clients');
     });
 
     return () => {

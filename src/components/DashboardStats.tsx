@@ -159,7 +159,7 @@ export default function DashboardStats({ profile, isDemoMode, clientId }: Dashbo
       setWidgetOrder([
         'stat-new', 'stat-followups', 'stat-actual-revenue', 'stat-revenue',
         'widget-ai', 'chart-historical-leads', 'chart-historical-meetings',
-        'table-monthly-comparison',
+        'table-monthly-evolution',
         'chart-funnel', 'chart-histogram',
         'chart-sectors', 'list-followups-simple', 'list-agenda', 'chart-stages', 'chart-status', 'table-tags',
         'list-activity'
@@ -864,7 +864,7 @@ export default function DashboardStats({ profile, isDemoMode, clientId }: Dashbo
             </CardContent>
           </Card>
         );
-      case 'table-monthly-comparison':
+      case 'table-monthly-evolution':
         return (
           <Card key={id} className="col-span-full border border-border shadow-none overflow-hidden bg-card rounded-2xl">
             <CardHeader className="border-b border-border bg-muted/30 px-6 py-4 flex flex-row items-center justify-between">

@@ -212,7 +212,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
         const stored = localStorage.getItem('demo-users');
         if (stored) {
           const allUsers = JSON.parse(stored) as UserProfile[];
-          const team = allUsers.filter(u => u.role === 'account_manager' || u.role === 'director');
+          const team = allUsers.filter(u => u.role === 'account_manager' || u.role === 'setter' || u.role === 'director');
           const sorted = [...team].sort((a, b) => {
             if (a.uid === profile?.uid) return -1;
             if (b.uid === profile?.uid) return 1;
@@ -240,7 +240,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
       };
     }
 
-    const teamQuery = query(collection(db, 'users'), where('role', 'in', ['account_manager', 'director']));
+    const teamQuery = query(collection(db, 'users'), where('role', 'in', ['account_manager', 'setter', 'director', 'commercial']));
     const teamUnsubscribe = onSnapshot(teamQuery, (snapshot) => {
       const users = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
       const sortedUsers = [...users].sort((a, b) => {
@@ -253,8 +253,6 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
       if (profile && sortedUsers.some(u => u.uid === profile.uid) && !expandedMember) {
         setExpandedMember(profile.uid);
       }
-    }, (error) => {
-      console.error("Error fetching team in TeamView:", error);
     });
 
     const clientQuery = query(collection(db, 'clients'));
@@ -265,9 +263,6 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
         !c.name.toLowerCase().includes('mi primer lead') && 
         !c.name.toLowerCase().includes('lead flow')
       ));
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching clients in TeamView:", error);
       setLoading(false);
     });
 
@@ -295,9 +290,6 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
       );
       const unsub = onSnapshot(q, (snap) => {
         setHistoryNotes(snap.docs.map(d => ({ id: d.id, ...d.data() } as ClientHistoryNote)));
-        setLoadingHistory(false);
-      }, (error) => {
-        console.error("Error fetching history notes in TeamView:", error);
         setLoadingHistory(false);
       });
       return () => unsub();
@@ -556,7 +548,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
     debouncedUpdateNote(clientId, note, clients, !!isDemoMode);
   };
 
-  const isManagementRole = profile?.role === 'director' || profile?.role === 'account_manager';
+  const isManagementRole = profile?.role === 'director' || profile?.role === 'account_manager' || profile?.role === 'setter' || profile?.role === 'commercial';
 
   return (
     <div className="p-8 space-y-8 bg-background text-foreground min-h-full">
@@ -566,13 +558,13 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
           <p className="text-[10px] text-muted-foreground font-black uppercase tracking-[0.2em]">Gestión de Cuentas y Asignaciones</p>
         </div>
         <div className="flex gap-3">
-          {(profile?.role === 'director' || profile?.role === 'account_manager') && (
+          {(profile?.role === 'director' || profile?.role === 'account_manager' || profile?.role === 'commercial') && (
             <Button variant="outline" onClick={() => setIsNewMemberOpen(true)} className="gap-2 font-bold bg-card border-border text-foreground hover:bg-muted border-2">
               <User size={18} />
               Sumar Equipo
             </Button>
           )}
-          {(profile?.role === 'director' || profile?.role === 'account_manager') && (
+          {(profile?.role === 'director' || profile?.role === 'account_manager' || profile?.role === 'commercial') && (
             <Button onClick={() => setIsNewClientOpen(true)} className="gap-2 font-black bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_4px_14px_rgba(var(--primary),0.3)]">
               <Plus size={18} />
               Sumar Cliente
@@ -605,19 +597,19 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
                   <div>
                     <div className="flex items-center gap-2">
                        <h3 className="font-bold text-foreground">{member.displayName}</h3>
-                       {member.role === 'director' ? (
-                         <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/30 text-[9px] font-bold uppercase">Directivo</Badge>
-                       ) : (
-                         <Badge className="bg-primary/10 text-primary border-primary/30 text-[9px] font-bold uppercase">Account Manager</Badge>
-                       )}
+                       {member.role === 'director' && <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/30 text-[9px] font-bold uppercase">Directivo</Badge>}
                     </div>
                     <p className="text-xs text-muted-foreground font-medium">{member.email}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-6">
                   <div className="text-right">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Asignados</p>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">AM</p>
                     <p className="text-sm font-bold text-primary">{amClients.length} Clientes</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Setter</p>
+                    <p className="text-sm font-bold text-blue-400">{setterClients.length} Clientes</p>
                   </div>
                   {isExpanded ? <ChevronDown size={20} className="text-muted-foreground" /> : <ChevronRight size={20} className="text-muted-foreground" />}
                 </div>
@@ -631,7 +623,10 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
                     </div>
                   ) : (
                     <div className="divide-y divide-border/50">
-                      {amClients.filter((c, i, self) => self.findIndex(t => t.id === c.id) === i).map((client) => {
+                      {[...amClients, ...setterClients].filter((c, i, self) => self.findIndex(t => t.id === c.id) === i).map((client) => {
+                        const isAM = client.accountManagerId === member.uid;
+                        const isSetter = client.setterId === member.uid;
+                        
                         return (
                           <div key={client.id} className="flex flex-col md:flex-row md:items-center justify-between p-4 hover:bg-muted/10 transition-colors group gap-4 md:gap-0">
                             <div className="flex items-center gap-3 min-w-[200px]">
@@ -642,7 +637,8 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
                                 <span className="font-bold text-sm text-foreground">{client.name}</span>
                                 <div className="flex items-center gap-3 mt-0.5">
                                   <div className="flex gap-2">
-                                    <span className="text-[9px] bg-secondary text-primary border border-primary/30 px-1.5 py-0.5 rounded font-bold uppercase tracking-tight">Asignado</span>
+                                    {isAM && <span className="text-[9px] bg-secondary text-primary border border-primary/30 px-1.5 py-0.5 rounded font-bold uppercase tracking-tight">AM</span>}
+                                    {isSetter && <span className="text-[9px] bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800 px-1.5 py-0.5 rounded font-bold uppercase tracking-tight">Setter</span>}
                                   </div>
                                   {client.planName && (
                                     <span className="text-[10px] text-muted-foreground font-semibold flex items-center gap-1">
@@ -729,7 +725,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
                                 Agenda
                               </Button>
                               
-                              {(profile?.role === 'director' || (profile?.role === 'account_manager' && client.accountManagerId === profile.uid)) && (
+                              {(profile?.role === 'director' || profile?.role === 'commercial' || (profile?.role === 'account_manager' && client.accountManagerId === profile.uid)) && (
                                 <>
                                   <div className="h-4 w-px bg-border/40 mx-1" />
 
@@ -777,7 +773,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
           <DialogHeader>
             <DialogTitle className="text-foreground">Sumar Nuevo Cliente</DialogTitle>
           </DialogHeader>
-            <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-2 px-1">
+          <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-2 px-1">
             <div className="space-y-2">
               <Label htmlFor="clientName" className="text-foreground font-medium">Nombre del Cliente</Label>
               <Input 
@@ -799,7 +795,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-foreground font-medium">Asignar Responsable (Team Members) *</Label>
+              <Label className="text-foreground font-medium">Asignar Account Manager *</Label>
               <div className="grid grid-cols-2 gap-2">
                 {teamMembers.map(member => (
                   <Button
@@ -808,6 +804,23 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
                     variant={selectedAMForNewClient === member.uid ? 'default' : 'outline'}
                     className={`justify-start font-bold text-[10px] h-8 ${selectedAMForNewClient === member.uid ? 'bg-primary text-primary-foreground' : 'border-border text-foreground'}`}
                     onClick={() => setSelectedAMForNewClient(member.uid)}
+                  >
+                    <User size={12} className="mr-1" />
+                    {member.displayName}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-foreground font-medium">Asignar Setter (Opcional)</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {teamMembers.map(member => (
+                  <Button
+                    key={member.uid}
+                    type="button"
+                    variant={selectedSetterForNewClient === member.uid ? 'default' : 'outline'}
+                    className={`justify-start font-bold text-[10px] h-8 ${selectedSetterForNewClient === member.uid ? 'bg-blue-600 text-white' : 'border-border text-foreground'}`}
+                    onClick={() => setSelectedSetterForNewClient(member.uid === selectedSetterForNewClient ? '' : member.uid)}
                   >
                     <User size={12} className="mr-1" />
                     {member.displayName}
@@ -1082,7 +1095,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Responsables Asignados *</Label>
+                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Account Manager Responsable *</Label>
                 <div className="grid grid-cols-3 gap-2">
                   {teamMembers.map(member => (
                     <Button
@@ -1091,6 +1104,23 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
                       variant={selectedAMForNewClient === member.uid ? 'default' : 'outline'}
                       className={`justify-start font-bold text-[10px] h-8 px-2 ${selectedAMForNewClient === member.uid ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-foreground bg-muted/30'}`}
                       onClick={() => setSelectedAMForNewClient(member.uid)}
+                    >
+                      <User size={12} className="mr-1 flex-shrink-0" />
+                      <span className="truncate">{member.displayName}</span>
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Setter Asignado (Opcional)</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {teamMembers.map(member => (
+                    <Button
+                      key={member.uid}
+                      type="button"
+                      variant={selectedSetterForNewClient === member.uid ? 'default' : 'outline'}
+                      className={`justify-start font-bold text-[10px] h-8 px-2 ${selectedSetterForNewClient === member.uid ? 'bg-blue-600 text-white border-blue-600' : 'border-border text-foreground bg-muted/30'}`}
+                      onClick={() => setSelectedSetterForNewClient(member.uid === selectedSetterForNewClient ? '' : member.uid)}
                     >
                       <User size={12} className="mr-1 flex-shrink-0" />
                       <span className="truncate">{member.displayName}</span>

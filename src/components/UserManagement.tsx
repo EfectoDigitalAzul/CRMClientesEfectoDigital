@@ -65,6 +65,7 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
         const storedUsers = localStorage.getItem('demo-users');
         if (storedUsers) {
           const parsed = JSON.parse(storedUsers);
+          // Migration: Ensure all demo users have isActive property
           const migrated = parsed.map((u: any) => u.isActive === undefined ? { ...u, isActive: true } : u);
           if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
             localStorage.setItem('demo-users', JSON.stringify(migrated));
@@ -75,7 +76,8 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
         } else {
           const initialUsers = [
             { uid: 'u-azul', email: 'azul@efectodigital.com.ar', displayName: 'Azul', role: 'director' as UserRole, isActive: true, createdAt: new Date().toISOString(), username: 'azul', password: 'azul' },
-            { uid: 'u-naza', email: 'nazareno@efectodigital.com.ar', displayName: 'Nazareno', role: 'account_manager' as UserRole, isActive: true, createdAt: new Date().toISOString(), username: 'naza', password: 'naza' },
+            { uid: 'u-naza', email: 'nazareno@efectodigital.com.ar', displayName: 'Naza', role: 'account_manager' as UserRole, isActive: true, createdAt: new Date().toISOString(), username: 'naza', password: 'naza' },
+            { uid: 'u-mariana', email: 'mariana@efectodigital.com', displayName: 'Mariana', role: 'commercial' as UserRole, isActive: true, createdAt: new Date().toISOString(), username: 'mariana', password: 'mariana' },
           ];
           setUsers(initialUsers);
           localStorage.setItem('demo-users', JSON.stringify(initialUsers));
@@ -85,8 +87,9 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
         if (storedClients) {
           setClients(JSON.parse(storedClients));
         } else {
-          setClients([]);
-          localStorage.setItem('demo-clients', JSON.stringify([]));
+          const initialClients: Client[] = [];
+          setClients(initialClients);
+          localStorage.setItem('demo-clients', JSON.stringify(initialClients));
         }
       };
 
@@ -98,19 +101,12 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
         window.removeEventListener('demo-clients-updated', loadData);
       };
     }
-    
-    // Always attach Firebase listeners if configured, even if isDemoMode is true (as a fallback sync)
     const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-      const allUsers = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
-      setUsers(allUsers);
-    }, (error) => {
-      console.warn("User sync notice: Using local view for permissions. Log in to sync.", error);
+      setUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
     });
 
     const unsubscribeClients = onSnapshot(query(collection(db, 'clients'), orderBy('name')), (snapshot) => {
       setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client)));
-    }, (error) => {
-      // Quiet fail to avoid spamming UI
     });
 
     return () => {
@@ -190,12 +186,11 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
     }
     setLoading(true);
     try {
-      const isClient = newUser.role === 'client';
       const userToCreate: UserProfile = {
-        uid: isClient ? `client-${lowerUsername}` : `staff-${lowerUsername || Math.random().toString(36).substr(2, 5)}`,
+        uid: newUser.role === 'client' ? `u-${lowerUsername}` : `u-staff-${lowerUsername || Math.random().toString(36).substr(2, 5)}`,
         username: lowerUsername,
         password: newUser.password,
-        email: lowerEmail || (isClient ? `${lowerUsername}@cliente.efectodigital.com.ar` : ''),
+        email: lowerEmail || (newUser.role === 'client' ? `${lowerUsername}@cliente.efectodigital.com.ar` : ''),
         displayName: newUser.displayName,
         role: newUser.role,
         assignedClientId: newUser.assignedClientId || undefined,
@@ -292,32 +287,24 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
   return (
     <div className="space-y-4 bg-background text-foreground min-h-full">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-foreground uppercase tracking-tighter">Panel de Accesos</h2>
-        {permissions?.canManageStaff && (
-          <Button 
-            size="sm"
-            className="h-8 text-xs font-bold uppercase gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
-            onClick={() => {
-              setNewUser({...newUser, role: 'account_manager'});
-              setIsAddUserOpen(true);
-            }}
-          >
-            <UserPlus size={14} />
-            Crear Acceso Personal
-          </Button>
-        )}
+        <h2 className="text-lg font-semibold text-foreground">Gestión de Accesos</h2>
+        <Button 
+          onClick={() => setIsAddUserOpen(true)} 
+          className="gap-2 font-bold bg-primary text-primary-foreground hover:bg-primary/90"
+        >
+          <UserPlus size={18} />
+          Crear Nuevo Acceso
+        </Button>
       </div>
 
       <div className="space-y-8">
         {/* Sección de Equipo - Solo para perfiles con permiso canViewStaff */}
         {permissions?.canViewStaff && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-black uppercase tracking-[0.2em] text-primary flex items-center gap-2 px-1">
-                <ShieldCheck size={14} />
-                Personal de Equipo
-              </h3>
-            </div>
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-primary flex items-center gap-2 px-1">
+              <ShieldCheck size={14} />
+              Personal de Equipo
+            </h3>
             <div className="rounded-xl border border-border bg-card shadow-none overflow-hidden">
               <Table>
                 <TableHeader className="bg-muted/50 border-b border-border">
@@ -364,7 +351,8 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                           value={user.role} 
                           onValueChange={(value) => handleRoleChange(user.uid, value as UserRole)}
                           disabled={
-                            !permissions?.canManageStaff ||
+                            (currentProfile?.role === 'setter' && user.role !== 'client') ||
+                            (currentProfile?.role === 'account_manager' && user.role !== 'client') ||
                             user.uid === currentProfile?.uid
                           }
                         >
@@ -372,6 +360,8 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                             <SelectValue placeholder="Rol" />
                           </SelectTrigger>
                           <SelectContent className="bg-popover border-border">
+                            <SelectItem value="setter">Setter</SelectItem>
+                            <SelectItem value="commercial">Comercial</SelectItem>
                             <SelectItem value="account_manager">AM</SelectItem>
                             <SelectItem value="director">Director</SelectItem>
                           </SelectContent>
@@ -381,7 +371,6 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                         <Button
                           variant="ghost"
                           size="icon"
-                          disabled={!permissions?.canManageStaff}
                           className={`h-8 w-8 ${user.isActive ? 'text-muted-foreground hover:text-destructive' : 'text-green-500 hover:text-green-600'}`}
                           onClick={() => handleToggleActive(user.uid, !!user.isActive)}
                           title={user.isActive ? "Bloquear acceso" : "Activar acceso"}
@@ -394,7 +383,6 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                           <Button
                             variant="ghost"
                             size="icon"
-                            disabled={!permissions?.canManageStaff}
                             className="h-8 w-8 text-muted-foreground hover:text-primary"
                             onClick={() => {
                               setEditingUser(user);
@@ -406,7 +394,6 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                           <Button
                             variant="ghost"
                             size="icon"
-                            disabled={!permissions?.canManageStaff}
                             className="h-8 w-8 text-muted-foreground hover:text-destructive"
                             onClick={() => handleDeleteUser(user.uid, user.displayName)}
                           >
@@ -422,28 +409,12 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
           </div>
         )}
 
-      {/* Client Accesses Section */}
+        {/* Sección de Clientes */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-primary flex items-center gap-2 px-1">
-              <UsersIcon size={14} />
-              Accesos a Clientes
-            </h3>
-            {permissions?.canManageClients && (
-              <Button 
-                size="sm"
-                variant="outline"
-                className="h-7 text-[10px] font-bold uppercase gap-1"
-                onClick={() => {
-                  setNewUser({...newUser, role: 'client'});
-                  setIsAddUserOpen(true);
-                }}
-              >
-                <UserPlus size={12} />
-                Crear Acceso Cliente
-              </Button>
-            )}
-          </div>
+          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-primary flex items-center gap-2 px-1">
+            <UsersIcon size={14} />
+            Accesos a Clientes
+          </h3>
           <div className="rounded-xl border border-border bg-card shadow-none overflow-hidden">
             <Table>
               <TableHeader className="bg-muted/50 border-b border-border">
@@ -499,7 +470,6 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                       <Select 
                         value={user.assignedClientId || "none"} 
                         onValueChange={(value) => handleClientAssignment(user.uid, value === "none" ? "" : value)}
-                        disabled={!permissions?.canManageClients}
                       >
                         <SelectTrigger className="w-[160px] h-8 text-xs bg-muted border-border font-medium">
                           <SelectValue placeholder="Proyecto">
@@ -508,7 +478,7 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                         </SelectTrigger>
                         <SelectContent className="bg-popover border-border">
                           <SelectItem value="none" className="text-xs italic text-muted-foreground">Sin asignar</SelectItem>
-                          {clients.filter(c => currentProfile?.role === 'director' || c.accountManagerId === currentProfile?.uid).map(c => (
+                          {clients.filter(c => currentProfile?.role === 'director' || currentProfile?.role === 'commercial' || c.accountManagerId === currentProfile?.uid).map(c => (
                             <SelectItem key={c.id} value={c.id} className="text-xs">{c.name}</SelectItem>
                           ))}
                         </SelectContent>
@@ -518,7 +488,6 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                       <Button
                         variant="ghost"
                         size="icon"
-                        disabled={!permissions?.canManageClients}
                         className={`h-8 w-8 ${user.isActive ? 'text-muted-foreground hover:text-destructive' : 'text-green-500 hover:text-green-600'}`}
                         onClick={() => handleToggleActive(user.uid, !!user.isActive)}
                         title={user.isActive ? "Bloquear acceso" : "Activar acceso"}
@@ -531,7 +500,6 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                         <Button
                           variant="ghost"
                           size="icon"
-                          disabled={!permissions?.canManageClients}
                           className="h-8 w-8 text-muted-foreground hover:text-primary"
                           onClick={() => {
                             setEditingUser(user);
@@ -543,7 +511,6 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                         <Button
                           variant="ghost"
                           size="icon"
-                          disabled={!permissions?.canManageClients}
                           className="h-8 w-8 text-muted-foreground hover:text-destructive"
                           onClick={() => handleDeleteUser(user.uid, user.displayName)}
                         >
@@ -578,7 +545,9 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                   <SelectItem value="client">Cliente</SelectItem>
                   {currentProfile?.role === 'director' && (
                     <>
+                      <SelectItem value="setter">Setter</SelectItem>
                       <SelectItem value="account_manager">Account Manager</SelectItem>
+                      <SelectItem value="commercial">Comercial</SelectItem>
                       <SelectItem value="director">Director</SelectItem>
                     </>
                   )}
@@ -587,15 +556,14 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="username" className="text-xs uppercase font-bold text-muted-foreground">Usuario para login (ej: naza_efecto)</Label>
+              <Label htmlFor="username" className="text-xs uppercase font-bold text-muted-foreground">Usuario (Login)</Label>
               <Input 
                 id="username" 
                 placeholder="ej: naza_efecto" 
                 value={newUser.username}
-                onChange={e => setNewUser({...newUser, username: e.target.value.toLowerCase().replace(/\s/g, '')})}
-                className="bg-muted border-border font-mono text-xs"
+                onChange={e => setNewUser({...newUser, username: e.target.value})}
+                className="bg-muted border-border"
               />
-              <p className="text-[10px] text-primary font-bold italic px-1 leading-tight">Importante: Es el nombre que deberán usar para entrar junto con la clave.</p>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="pass" className="text-xs uppercase font-bold text-muted-foreground">Contraseña</Label>
@@ -608,31 +576,27 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
               />
             </div>
 
-        {newUser.role !== 'client' && (
-          <div className="grid gap-2">
-            <Label htmlFor="email" className="text-xs uppercase font-bold text-muted-foreground">Email Personal (@efectodigital)</Label>
-            <Input 
-              id="email" 
-              placeholder="ejemplo@efectodigital.com.ar" 
-              value={newUser.email}
-              onChange={e => setNewUser({...newUser, email: e.target.value})}
-              className="bg-muted border-border"
-            />
-          </div>
-        )}
+              <div className="grid gap-2">
+                <Label htmlFor="email" className="text-xs uppercase font-bold text-muted-foreground">Email Personal (@efectodigital)</Label>
+                <Input 
+                  id="email" 
+                  placeholder="ejemplo@efectodigital.com.ar" 
+                  value={newUser.email}
+                  onChange={e => setNewUser({...newUser, email: e.target.value})}
+                  className="bg-muted border-border"
+                />
+              </div>
 
-        <div className="grid gap-2">
-          <Label htmlFor="name" className="text-xs uppercase font-bold text-muted-foreground">
-            {newUser.role === 'client' ? 'Nombre del Cliente / Empresa' : 'Nombre Completo'}
-          </Label>
-          <Input 
-            id="name" 
-            placeholder={newUser.role === 'client' ? "Ej: Empresa S.A." : "Ej: Mariana Rodríguez"} 
-            value={newUser.displayName}
-            onChange={e => setNewUser({...newUser, displayName: e.target.value})}
-            className="bg-muted border-border"
-          />
-        </div>
+            <div className="grid gap-2">
+              <Label htmlFor="name" className="text-xs uppercase font-bold text-muted-foreground">Nombre para mostrar / Empresa</Label>
+              <Input 
+                id="name" 
+                placeholder="Ej: Mariana Rodríguez" 
+                value={newUser.displayName}
+                onChange={e => setNewUser({...newUser, displayName: e.target.value})}
+                className="bg-muted border-border"
+              />
+            </div>
             {newUser.role === 'client' && (
               <div className="grid gap-2">
                 <Label className="text-xs uppercase font-bold text-muted-foreground">Asignar Proyecto</Label>
@@ -644,7 +608,7 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                     <SelectValue placeholder="Seleccionar cliente" />
                   </SelectTrigger>
                   <SelectContent>
-                  {clients.filter(c => currentProfile?.role === 'director' || c.accountManagerId === currentProfile?.uid).map(c => (
+                  {clients.filter(c => currentProfile?.role === 'director' || currentProfile?.role === 'commercial' || c.accountManagerId === currentProfile?.uid).map(c => (
                     <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                   ))}
                   </SelectContent>
@@ -723,7 +687,9 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                     <SelectItem value="client">Cliente</SelectItem>
                     {currentProfile?.role === 'director' && (
                       <>
+                        <SelectItem value="setter">Setter</SelectItem>
                         <SelectItem value="account_manager">AM</SelectItem>
+                        <SelectItem value="commercial">Comercial</SelectItem>
                         <SelectItem value="director">Director</SelectItem>
                       </>
                     )}

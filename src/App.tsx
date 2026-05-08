@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { auth, db, loginWithGoogle, logout, isFirebaseConfigured, ensureAuth } from './lib/firebase';
+import { auth, db, loginWithGoogle, logout, isFirebaseConfigured } from './lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot, collection, query, where, orderBy, getDocs, updateDoc, deleteDoc } from 'firebase/firestore';
 import { UserProfile, Lead, UserRole, Client, Meeting } from './types';
@@ -128,29 +128,17 @@ export default function App() {
       window.addEventListener('demo-clients-updated', updateClients);
       return () => window.removeEventListener('demo-clients-updated', updateClients);
     } else {
-      if (!profile) return;
-
-      const isStaff = profile.role === 'director' || 
-                      profile.role === 'account_manager' || 
-                      profile.email?.endsWith('@efectodigital.com.ar') || 
-                      profile.email?.endsWith('@efectodigital.com');
-
-      const clientsQuery = (isStaff) 
-        ? collection(db, 'clients')
-        : query(collection(db, 'clients'), where('id', '==', profile.assignedClientId || 'none'));
-
-      const unsubscribe = onSnapshot(clientsQuery, (snapshot) => {
+      const unsubscribe = onSnapshot(collection(db, 'clients'), (snapshot) => {
         const allClients = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client));
+        // Explicitly filter out the unwanted placeholder if it exists in Firestore
         setClients(allClients.filter(c => 
           !c.name.toLowerCase().includes('mi primer lead') && 
           !c.name.toLowerCase().includes('lead flow')
         ));
-      }, (error) => {
-        console.error("Error fetching clients:", error);
       });
       return () => unsubscribe();
     }
-  }, [isDemoMode, profile]);
+  }, [isDemoMode]);
 
   useEffect(() => {
     if (isDemoMode) {
@@ -174,40 +162,35 @@ export default function App() {
         window.removeEventListener('demo-meetings-updated', updateData);
       };
     } else {
-      if (!profile) return;
-
-      const isStaff = profile.role === 'director' || 
-                      profile.role === 'account_manager' || 
-                      profile.email?.endsWith('@efectodigital.com.ar') || 
-                      profile.email?.endsWith('@efectodigital.com');
+      const isStaff = profile?.role === 'director' || 
+                      profile?.role === 'account_manager' || 
+                      profile?.role === 'setter' || 
+                      profile?.role === 'commercial' || 
+                      profile?.email?.endsWith('@efectodigital.com.ar') || 
+                      profile?.email?.endsWith('@efectodigital.com') ||
+                      user?.email?.endsWith('@efectodigital.com.ar') ||
+                      user?.email?.endsWith('@efectodigital.com');
       
-      // Clients can only see their own leads
-      const effectiveClientId = isStaff ? selectedClientId : profile.assignedClientId;
-
-      if (!effectiveClientId && !isStaff) {
+      if (!selectedClientId && !isStaff) {
         setLeads([]);
         setMeetings([]);
         return;
       }
 
-      const lQuery = effectiveClientId 
-        ? query(collection(db, 'leads'), where('clientId', '==', effectiveClientId))
+      const lQuery = selectedClientId 
+        ? query(collection(db, 'leads'), where('clientId', '==', selectedClientId))
         : query(collection(db, 'leads'));
         
-      const mQuery = effectiveClientId
-        ? query(collection(db, 'meetings'), where('clientId', '==', effectiveClientId))
+      const mQuery = selectedClientId
+        ? query(collection(db, 'meetings'), where('clientId', '==', selectedClientId))
         : query(collection(db, 'meetings'));
 
       const unsubL = onSnapshot(lQuery, (snap) => {
         setLeads(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead)));
-      }, (error) => {
-        console.error("Error fetching leads:", error);
       });
 
       const unsubM = onSnapshot(mQuery, (snap) => {
         setMeetings(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
-      }, (error) => {
-        console.error("Error fetching meetings:", error);
       });
 
       return () => {
@@ -215,7 +198,7 @@ export default function App() {
         unsubM();
       };
     }
-  }, [selectedClientId, isDemoMode, profile]);
+  }, [selectedClientId, isDemoMode, profile?.role]);
 
   useEffect(() => {
     if (!profile || clients.length === 0) return;
@@ -270,7 +253,9 @@ export default function App() {
         const isMyClient = myClients.some(c => c.id === l.clientId) || (isDirector && myClients.length === 0);
         
         // Only notify if it's their stage (Setter for setter stage, etc)
-        const isMyStage = (profile.role === 'director' || profile.role === 'account_manager');
+        const isMyStage = (profile.role === 'setter' && l.stage === 'setter') || 
+                          (profile.role === 'commercial' && l.stage === 'commercial') ||
+                          (profile.role === 'director' || profile.role === 'account_manager');
 
         return isTodayOrPast && isMyClient && isMyStage;
       });
@@ -305,24 +290,10 @@ export default function App() {
         lastNotifiedCount.current = combined.length;
       }
     } else {
-      if (!profile) return;
-      
-      const isStaff = profile.role === 'director' || 
-                      profile.role === 'account_manager' || 
-                      profile.email?.endsWith('@efectodigital.com.ar') || 
-                      profile.email?.endsWith('@efectodigital.com');
-
       // For real mode, we would need to listen to both collections
       // This is a bit more complex for a single useEffect, but we can nest snapshots or use a combined state
-      
-      // If client, we should filter by their assignedClientId to avoid permission denied
-      const mQuery = isStaff 
-        ? query(collection(db, 'meetings'), where('status', '==', 'pending'))
-        : query(collection(db, 'meetings'), where('status', '==', 'pending'), where('clientId', '==', profile.assignedClientId || 'none'));
-
-      const lQuery = isStaff
-        ? query(collection(db, 'leads'), where('isActive', '==', true))
-        : query(collection(db, 'leads'), where('isActive', '==', true), where('clientId', '==', profile.assignedClientId || 'none'));
+      const mQuery = query(collection(db, 'meetings'), where('status', '==', 'pending'));
+      const lQuery = query(collection(db, 'leads'), where('isActive', '==', true));
 
       const unsubM = onSnapshot(mQuery, (mSnap) => {
         const meetings = mSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -333,8 +304,6 @@ export default function App() {
           ...prev.filter(n => n.type !== 'meeting'),
           ...mNotifs
         ]);
-      }, (error) => {
-        console.error("Error fetching meeting notifications:", error);
       });
 
       const unsubL = onSnapshot(lQuery, (lSnap) => {
@@ -345,8 +314,6 @@ export default function App() {
           ...prev.filter(n => n.type !== 'follow_up'),
           ...fNotifs
         ]);
-      }, (error) => {
-        console.error("Error fetching lead notifications:", error);
       });
 
       return () => {
@@ -380,8 +347,6 @@ export default function App() {
         if (doc.exists()) {
           setSelectedClient({ id: doc.id, ...doc.data() } as Client);
         }
-      }, (error) => {
-        console.error("Error fetching selected client in App.tsx:", error);
       });
       return () => unsubscribe();
     } else {
@@ -402,7 +367,8 @@ export default function App() {
     if (!stored) {
       const initialUsers = [
         { uid: 'u-azul', email: 'azul@efectodigital.com.ar', displayName: 'Azul', role: 'director' as UserRole, isActive: true, createdAt: new Date().toISOString(), username: 'azul', password: 'azul' },
-        { uid: 'u-naza', email: 'nazareno@efectodigital.com.ar', displayName: 'Nazareno', role: 'account_manager' as UserRole, isActive: true, createdAt: new Date().toISOString(), username: 'naza', password: 'naza' },
+        { uid: 'u-naza', email: 'nazareno@efectodigital.com.ar', displayName: 'Naza', role: 'account_manager' as UserRole, isActive: true, createdAt: new Date().toISOString(), username: 'naza', password: 'naza' },
+        { uid: 'u-mariana', email: 'mariana@efectodigital.com', displayName: 'Mariana', role: 'account_manager' as UserRole, isActive: true, createdAt: new Date().toISOString(), username: 'mariana', password: 'mariana' },
         { uid: 'demo-director', email: 'director@efectodigital.com.ar', displayName: 'Director Efecto', role: 'director' as UserRole, isActive: true, createdAt: new Date().toISOString(), username: 'director', password: 'efecto2024' },
       ];
       localStorage.setItem('demo-users', JSON.stringify(initialUsers));
@@ -536,7 +502,7 @@ export default function App() {
               uid: currentUser.uid,
               email: lowerEmail || '',
               displayName: currentUser.displayName || 'User',
-              role: isAdminEmail ? 'director' : 'account_manager', 
+              role: isAdminEmail ? 'director' : (isStaffEmail ? 'account_manager' : 'setter'), 
               isActive: true,
               photoURL: currentUser.photoURL || undefined,
               createdAt: new Date().toISOString(),
@@ -612,7 +578,7 @@ export default function App() {
       createdAt: new Date().toISOString()
     };
     setProfile(demoProfile);
-    toast.warning("ATENCIÓN: Estás en Modo Demo local. Los datos no se guardarán en la nube. ¡Recomendamos usar Login de Google o Usuario Real!", { duration: 8000 });
+    toast.warning("SISTEMA EN MODO DEMO: Los datos que ingreses NO se compartirán con el equipo. Usa el LOGIN DE GOOGLE para trabajar con datos reales.", { duration: 8000 });
   };
 
   if (loading && isFirebaseConfigured) {
@@ -675,49 +641,23 @@ export default function App() {
       } else {
         // High-reliability search in Firestore
         try {
-          await ensureAuth();
-          // Try all possible prefix combinations for maximum compatibility
-          const idsToTry = [
-            `staff-${lowerUsername}`,
-            `client-${lowerUsername}`,
-            lowerUsername,
-            `u-${lowerUsername}`,
-            `u-staff-${lowerUsername}`
-          ];
-
-          for (const id of idsToTry) {
-            try {
-              const snap = await getDoc(doc(db, 'users', id));
-              if (snap.exists()) {
-                const data = { uid: snap.id, ...snap.data() } as UserProfile;
-                if (data.password === credentials.password) {
-                  foundProfile = data;
-                  break;
-                }
-              }
-            } catch (readErr) {
-              console.warn(`Retry login with ID ${id} failed:`, readErr);
-            }
-          }
-
-          // Fallback final: Búsqueda por query de email si lo que ingresó parece un email y no se encontró por ID
-          if (!foundProfile && lowerUsername.includes('@')) {
-            try {
-              const qEmail = query(collection(db, 'users'), where('email', '==', lowerUsername));
-              const snapEmail = await getDocs(qEmail);
-              if (!snapEmail.empty) {
-                const data = { uid: snapEmail.docs[0].id, ...snapEmail.docs[0].data() } as UserProfile;
-                if (data.password === credentials.password) {
-                  foundProfile = data;
-                }
-              }
-            } catch (queryErr) {
-              console.warn("Email query login failed:", queryErr);
-            }
-          }
+          const usersRef = collection(db, 'users');
+          const querySnap = await getDocs(usersRef);
+          const allUsers = querySnap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile));
           
+          foundProfile = allUsers.find(u => 
+            (u.username?.toLowerCase() === lowerUsername || u.email?.toLowerCase() === lowerUsername) && 
+            u.password === credentials.password
+          ) || null;
         } catch (err) {
           console.error("Auth search error:", err);
+          // Fallback to specific doc reads if search fails
+          let snap = await getDoc(doc(db, 'users', `u-${lowerUsername}`));
+          if (!snap.exists()) snap = await getDoc(doc(db, 'users', `u-staff-${lowerUsername}`));
+          if (snap.exists()) {
+            const data = { uid: snap.id, ...snap.data() } as UserProfile;
+            if (data.password === credentials.password) foundProfile = data;
+          }
         }
       }
 
@@ -725,30 +665,30 @@ export default function App() {
         if (!foundProfile.isActive) {
           toast.error("Tu cuenta está bloqueada");
         } else {
+          if (!isFirebaseConfigured) {
+            setIsDemoMode(true);
+          }
           setProfile(foundProfile);
           toast.success(`Bienvenido, ${foundProfile.displayName}`);
         }
-      } else {
-        // Final fallback search directly by username field
-        try {
-          const usersRef = collection(db, 'users');
-          const q = query(usersRef, where('username', '==', lowerUsername), where('password', '==', credentials.password));
-          const querySnap = await getDocs(q);
-          if (!querySnap.empty) {
-            const data = { uid: querySnap.docs[0].id, ...querySnap.docs[0].data() } as UserProfile;
-            if (data.isActive) {
-              setProfile(data);
-              toast.success(`Bienvenido, ${data.displayName}`);
-            } else {
-              toast.error("Tu cuenta está bloqueada");
-            }
+      } else if (!isDemoMode && isFirebaseConfigured) {
+        // If not found in demo, try a query by username in Firebase
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('username', '==', lowerUsername), where('password', '==', credentials.password));
+        const querySnap = await getDocs(q);
+        if (!querySnap.empty) {
+          const data = { uid: querySnap.docs[0].id, ...querySnap.docs[0].data() } as UserProfile;
+          if (data.isActive) {
+            setProfile(data);
+            toast.success(`Bienvenido, ${data.displayName}`);
           } else {
-            toast.error("Usuario o contraseña incorrectos. Verifica tus credenciales.");
+            toast.error("Tu cuenta está bloqueada");
           }
-        } catch (finalErr) {
-          toast.error("Error al conectar con la base de datos de usuarios.");
-          console.error(finalErr);
+        } else {
+          toast.error("Usuario o contraseña incorrectos");
         }
+      } else {
+        toast.error("Usuario o contraseña incorrectos");
       }
     } catch (error) {
       toast.error("Error al iniciar sesión");
@@ -766,7 +706,7 @@ export default function App() {
 
         <div className="w-full max-w-md space-y-8 relative z-10">
           <div className="text-center space-y-4">
-            <div className="inline-flex flex-col items-center mb-4">
+            <div className="inline-flex flex-col items-center mb-4 cursor-pointer" onClick={enterDemoMode}>
               <span className="text-5xl font-black leading-none tracking-tighter text-white font-montserrat">EFECTO</span>
               <span className="text-sm font-black text-primary tracking-[0.4em] font-montserrat ml-2">DIGITAL</span>
             </div>
@@ -851,13 +791,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-background overflow-hidden">
-      {isDemoMode && (
-        <div className="bg-destructive text-destructive-foreground py-1.5 px-4 text-[10px] font-black uppercase tracking-[0.2em] text-center z-[100] animate-pulse border-b border-destructive-foreground/20">
-           ⚠️ MODO DEMO ACTIVO: LOS DATOS NO SE GUARDAN EN LA NUBE Y NO SON VISTOS POR EL RESTO DEL EQUIPO ⚠️
-        </div>
-      )}
-      <div className="flex flex-1 overflow-hidden relative">
+    <div className="flex h-screen w-screen bg-background overflow-hidden">
       {/* Mobile Sidebar Overlay */}
       {isMobileMenuOpen && (
         <div 
@@ -1175,8 +1109,8 @@ export default function App() {
               onTargetProcessed={() => setTargetTaskId(null)}
             />
           )}
-          {activeTab === 'settings' && (profile?.role === 'director' || profile?.role === 'account_manager') && <UserManagement isDemoMode={isDemoMode} currentProfile={profile} />}
-          {activeTab === 'team' && profile?.role !== 'client' && (profile?.role === 'director' || profile?.role === 'account_manager') && (
+          {activeTab === 'settings' && (profile?.role === 'director' || profile?.role === 'account_manager' || profile?.role === 'commercial') && <UserManagement isDemoMode={isDemoMode} currentProfile={profile} />}
+          {activeTab === 'team' && profile?.role !== 'client' && (profile?.role === 'director' || profile?.role === 'account_manager' || profile?.role === 'setter' || profile?.role === 'commercial') && (
             <TeamView 
               onClientSelect={setSelectedClientId} 
               onTabChange={setActiveTab}
@@ -1203,7 +1137,6 @@ export default function App() {
         />
       )}
       <Toaster position="top-right" theme={theme} />
-      </div>
     </div>
   );
 }

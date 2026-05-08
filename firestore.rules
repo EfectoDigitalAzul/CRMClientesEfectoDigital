@@ -31,16 +31,19 @@ service cloud.firestore {
     }
 
     function isDirector() {
-      return hasRole('director') || (
-        isSignedIn() && 
-        request.auth.token.email_verified == true && 
-        (request.auth.token.email == 'azul@efectodigital.com.ar' || 
-         request.auth.token.email == 'nazareno@efectodigital.com.ar')
-      );
+      return hasRole('director');
     }
 
     function isAM() {
       return hasRole('account_manager');
+    }
+
+    function isSetter() {
+      return hasRole('setter');
+    }
+
+    function isCommercial() {
+      return hasRole('commercial');
     }
 
     function isOwner(userId) {
@@ -56,19 +59,17 @@ service cloud.firestore {
     // ===============================================================
     function isValidUser(data) {
       return data.email is string && data.email.size() <= 100 &&
-             data.role in ['director', 'account_manager', 'client'] &&
+             data.role in ['director', 'account_manager', 'setter', 'commercial', 'client'] &&
              data.displayName is string && data.displayName.size() <= 100;
     }
 
     function isValidClient(data) {
-      return data.keys().hasAll(['name']) && 
-             data.name is string && data.name.size() <= 100 &&
-             (!data.keys().contains('accountManagerId') || data.accountManagerId == null || isValidId(data.accountManagerId));
+      return data.name is string && data.name.size() <= 100 &&
+             (data.accountManagerId == null || isValidId(data.accountManagerId));
     }
 
     function isValidLead(data) {
-      return data.keys().hasAll(['name', 'clientId', 'status']) &&
-             data.name is string && data.name.size() <= 100 &&
+      return data.name is string && data.name.size() <= 100 &&
              data.clientId is string && isValidId(data.clientId) &&
              data.status in ['new', 'contacted', 'follow-up', 'meeting-scheduled', 'closed-won', 'closed-lost', 'reschedule', 'qualified'];
     }
@@ -80,9 +81,21 @@ service cloud.firestore {
     // User Profiles
     match /users/{userId} {
       allow get: if true; // Enabled for custom username/password login check
-      allow list: if isSignedIn(); // Permite búsqueda de perfil si hay sesión (incluye anónima)
-      allow create: if isDirector() || (isSignedIn() && request.auth.uid == userId && isStaffDomain());
-      allow update: if isDirector() || (isSignedIn() && request.auth.uid == userId);
+      allow list: if isSignedIn();
+      // Allow directors to create any user. 
+      // Allow users with staff domain to create their own profile.
+      // Allow AMs/Setters to create client profiles.
+      allow create: if isDirector() || (isSignedIn() && request.auth.uid == userId && isStaffDomain()) || (
+        (isAM() || isSetter()) && 
+        request.resource.data.role == 'client' && 
+        isValidUser(request.resource.data)
+      );
+      allow update: if isDirector() || (
+        isSignedIn() && (
+          request.auth.uid == userId ||
+          ((isAM() || isSetter()) && resource.data.role == 'client')
+        )
+      );
       allow delete: if isDirector();
     }
 
@@ -91,6 +104,7 @@ service cloud.firestore {
       function canAccessClient(clientData) {
         return isDirector() || 
                isAM() ||
+               isSetter() ||
                isStaffDomain() ||
                (getUserData().role == 'client' && getUserData().assignedClientId == clientId);
       }
@@ -101,8 +115,8 @@ service cloud.firestore {
       allow delete: if isDirector();
 
       match /historyNotes/{noteId} {
-        allow read: if isSignedIn() && (isDirector() || isAM());
-        allow create: if isSignedIn() && (isDirector() || isAM());
+        allow read: if isSignedIn() && (isDirector() || isAM() || isSetter() || isCommercial());
+        allow create: if isSignedIn() && (isDirector() || isAM() || isSetter() || isCommercial());
         allow update: if isDirector() || (isSignedIn() && resource.data.authorId == request.auth.uid);
         allow delete: if isDirector();
       }
@@ -110,37 +124,33 @@ service cloud.firestore {
 
     // Leads
     match /leads/{leadId} {
+      function getClient(compId) {
+        return get(/databases/$(database)/documents/clients/$(compId)).data;
+      }
+
       function canAccessLead(leadData) {
+        let client = getClient(leadData.clientId);
         return isDirector() || 
                isAM() ||
+               isSetter() ||
                isStaffDomain() ||
                (getUserData().role == 'client' && getUserData().assignedClientId == leadData.clientId);
       }
 
       allow read: if isSignedIn() && canAccessLead(resource.data);
-      allow create: if isDirector() || isAM();
-      allow update: if isDirector() || isAM();
-      allow delete: if isDirector() || (isAM() && get(/databases/$(database)/documents/clients/$(resource.data.clientId)).data.accountManagerId == request.auth.uid);
+      allow create: if isDirector() || isAM() || isSetter();
+      allow update: if isDirector() || isAM() || isSetter() || isCommercial();
+      allow delete: if isDirector() || (isAM() && getClient(resource.data.clientId).accountManagerId == request.auth.uid);
 
       match /followUps/{followUpId} {
         allow read: if isSignedIn() && canAccessLead(get(/databases/$(database)/documents/leads/$(leadId)).data);
         allow write: if isSignedIn() && canAccessLead(get(/databases/$(database)/documents/leads/$(leadId)).data);
       }
-    }
 
-    // Top-level Meetings (Cross-lead agenda)
-    match /meetings/{meetingId} {
-      function canAccessMeeting(meetingData) {
-        return isDirector() || 
-               isAM() ||
-               isStaffDomain() ||
-               (getUserData().role == 'client' && getUserData().assignedClientId == meetingData.clientId);
+      match /meetings/{meetingId} {
+        allow read: if isSignedIn() && canAccessLead(get(/databases/$(database)/documents/leads/$(leadId)).data);
+        allow write: if isSignedIn() && canAccessLead(get(/databases/$(database)/documents/leads/$(leadId)).data);
       }
-
-      allow read: if isSignedIn() && canAccessMeeting(resource.data);
-      allow create: if isDirector() || isAM();
-      allow update: if isDirector() || isAM() || (getUserData().role == 'client' && resource.data.clientId == getUserData().assignedClientId);
-      allow delete: if isDirector();
     }
 
     // Notifications

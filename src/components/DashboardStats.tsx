@@ -206,20 +206,12 @@ export default function DashboardStats({ profile, isDemoMode, clientId }: Dashbo
       const leadsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
       setLeads(leadsData);
       checkLoading();
-    }, (error) => {
-      console.error("Error fetching leads in Dashboard:", error);
-      toast.error("Error al cargar leads del tablero");
-      setLoading(false);
     });
 
     const unsubMeetings = onSnapshot(qMeetings, (snapshot) => {
       const meetingsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       setMeetings(meetingsData);
       checkLoading();
-    }, (error) => {
-      console.error("Error fetching meetings in Dashboard:", error);
-      toast.error("Error al cargar reuniones del tablero");
-      setLoading(false);
     });
 
     function checkLoading() {
@@ -457,8 +449,8 @@ export default function DashboardStats({ profile, isDemoMode, clientId }: Dashbo
   ];
 
   const stageData = [
-    { name: 'Prospección', value: stats.setter, color: '#3b82f6' },
-    { name: 'Comercial', value: stats.commercial, color: '#8b5cf6' },
+    { name: 'Fase Setter', value: stats.setter, color: '#3b82f6' },
+    { name: 'Fase Comercial', value: stats.commercial, color: '#8b5cf6' },
   ];
 
   const COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#64748b'];
@@ -1339,7 +1331,7 @@ export default function DashboardStats({ profile, isDemoMode, clientId }: Dashbo
                       contactInfo: "marcos@applica.io",
                       sector: "Tecnología",
                       status: "new",
-                      stage: 'setter',
+                      stage: profile?.role === 'commercial' ? 'commercial' : 'setter',
                       followUps: [],
                       meetings: [],
                       followUpSequence: 0,

@@ -266,15 +266,11 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
     const fuQuery = query(collection(db, 'leads', lead.id, 'followUps'), orderBy('date', 'desc'));
     const fuUnsubscribe = onSnapshot(fuQuery, (snapshot) => {
       setFollowUps(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowUp)));
-    }, (error) => {
-      console.error("Error fetching followUps in LeadDetails:", error);
     });
 
     const mQuery = query(collection(db, 'leads', lead.id, 'meetings'), orderBy('date', 'desc'));
     const mUnsubscribe = onSnapshot(mQuery, (snapshot) => {
       setMeetings(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Meeting)));
-    }, (error) => {
-      console.error("Error fetching meetings in LeadDetails:", error);
     });
 
     return () => {
@@ -301,7 +297,7 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
     try {
       const fu: Omit<FollowUp, 'id'> = {
         date: new Date().toISOString(),
-        type: profile?.role || 'account_manager',
+        type: profile?.role === 'setter' ? 'setter' : 'commercial',
         note: newNote,
         authorId: profile?.uid || auth.currentUser?.uid || 'demo-user',
         authorName: profile?.displayName || 'Usuario',
@@ -412,7 +408,7 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
         stage: newStage,
         updatedAt: now.toISOString(),
         nextFollowUpDate: nextFollowUp.toISOString(),
-        lastAction: `Cambiado a Fase ${newStage === 'setter' ? 'Prospección' : 'Comercial'}`
+        lastAction: `Cambiado a Fase ${newStage === 'setter' ? 'Setter' : 'Comercial'}`
       };
 
       if (isDemoMode) {
@@ -420,7 +416,7 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
       } else {
         await updateDoc(doc(db, 'leads', lead.id), updates);
       }
-      toast.success(`Etapa actualizada a ${newStage === 'setter' ? 'Prospección' : 'Comercial'}`);
+      toast.success(`Etapa actualizada a ${newStage === 'setter' ? 'Setter' : 'Comercial'}`);
     } catch (error) {
       toast.error("Error al actualizar etapa");
     }
@@ -582,7 +578,7 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
       const fuNote = `Seguimiento Semanal #${currentSequence + 1} completado automáticamente.`;
       const fu: Omit<FollowUp, 'id'> = {
         date: now.toISOString(),
-        type: profile?.role || 'account_manager',
+        type: profile?.role === 'setter' ? 'setter' : 'commercial',
         note: fuNote,
         authorId: auth.currentUser?.uid || 'demo-user',
         authorName: profile?.displayName || 'Sistema',
@@ -752,12 +748,12 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
                   {lead.stage === 'setter' ? (
                     <>
                       <UserCheck size={12} />
-                      <span>Prospección</span>
+                      <span>Fase Setter</span>
                     </>
                   ) : (
                     <>
                       <UserCog size={12} />
-                      <span>Comercial</span>
+                      <span>Fase Comercial</span>
                     </>
                   )}
                 </Badge>
@@ -870,7 +866,9 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
           <section className="space-y-6">
             <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Historial de Seguimiento</h3>
             <div className="space-y-4">
-              {followUps.map((fu) => (
+              {followUps
+                .filter(fu => fu.authorId === profile?.uid)
+                .map((fu) => (
                   <div key={fu.id} className="relative pl-6 border-l-2 border-primary/20 py-1">
                     <div className="absolute -left-[5px] top-2 h-2 w-2 rounded-full bg-primary"></div>
                     <div className="flex items-center justify-between mb-1">

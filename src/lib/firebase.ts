@@ -1,61 +1,30 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, signInAnonymously } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, getDoc, updateDoc, addDoc, query, where, getDocs, onSnapshot, orderBy, Timestamp } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, getDoc, updateDoc, addDoc, query, where, onSnapshot, orderBy, Timestamp } from 'firebase/firestore';
 
-// Configuración de Firebase
-const finalConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseConfig.apiKey,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfig.authDomain,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseConfig.projectId,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfig.storageBucket,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfig.messagingSenderId,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || firebaseConfig.appId,
-  databaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID || firebaseConfig.firestoreDatabaseId
+// Placeholder config - will be replaced by firebase-applet-config.json if it exists
+const firebaseConfig = {
+  apiKey: "PLACEHOLDER",
+  authDomain: "PLACEHOLDER",
+  projectId: "PLACEHOLDER",
+  storageBucket: "PLACEHOLDER",
+  messagingSenderId: "PLACEHOLDER",
+  appId: "PLACEHOLDER"
 };
 
-console.log("🚀 CRM Conectado a Firebase!");
-console.log("Proyecto:", finalConfig.projectId);
-console.log("Base de datos:", finalConfig.databaseId || "(default)");
+// Import real config if available
+import configData from '../../firebase-applet-config.json';
+const config = configData || firebaseConfig;
 
-export const isFirebaseConfigured = !!finalConfig.apiKey && finalConfig.apiKey !== "PLACEHOLDER";
+export const isFirebaseConfigured = config && config.apiKey && config.apiKey !== "PLACEHOLDER";
 
-// Inicialización de Firebase
-const app = initializeApp(finalConfig);
+// Initialize with safe fallback if not configured
+const app = initializeApp(isFirebaseConfigured ? config : { ...firebaseConfig, apiKey: "dummy-key-for-init" });
 export const auth = getAuth(app);
-
-// ID de la base de datos
-const dbId = finalConfig.databaseId || "(default)";
-export const db = getFirestore(app, dbId);
-
-console.log("🔥 Firestore instanciado con DB:", dbId);
-
+export const db = getFirestore(app, (config as any).firestoreDatabaseId);
 export const googleProvider = new GoogleAuthProvider();
 
-export const loginWithGoogle = async () => {
-  try {
-    return await signInWithPopup(auth, googleProvider);
-  } catch (error: any) {
-    if (error.code === 'auth/popup-closed-by-user') {
-      console.log('El usuario cerró la ventana de inicio de sesión.');
-      return;
-    }
-    console.error('Error al iniciar sesión:', error);
-    throw error;
-  }
-};
-
-export const ensureAuth = async () => {
-  if (!auth.currentUser) {
-    try {
-      await signInAnonymously(auth);
-      console.log("🔑 Sesión anónima iniciada para operaciones básicas");
-    } catch (e) {
-      console.error("Error en sesión anónima:", e);
-    }
-  }
-};
-
+export const loginWithGoogle = () => signInWithPopup(auth, googleProvider);
 export const logout = () => signOut(auth);
 
 // Error handling helper

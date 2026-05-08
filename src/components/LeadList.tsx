@@ -230,6 +230,8 @@ export default function LeadList({ profile, isDemoMode, clientId, targetId, onTa
     if (!isDue) return false;
 
     // Filter by stage based on role for "real" actionable data
+    if (profile?.role === 'setter') return l.stage === 'setter';
+    if (profile?.role === 'commercial') return l.stage === 'commercial';
     if (profile?.role === 'client') return false;
 
     return true;
@@ -255,7 +257,7 @@ export default function LeadList({ profile, isDemoMode, clientId, targetId, onTa
         if (stored) {
           const allLeads: Lead[] = JSON.parse(stored);
           const updated = allLeads.map(l => 
-            l.id === lead.id ? { ...l, stage: newStage, updatedAt: new Date().toISOString(), lastAction: `Cambiado a Fase ${newStage === 'setter' ? 'Prospección' : 'Comercial'}` } : l
+            l.id === lead.id ? { ...l, stage: newStage, updatedAt: new Date().toISOString(), lastAction: `Cambiado a Fase ${newStage === 'setter' ? 'Setter' : 'Comercial'}` } : l
           );
           localStorage.setItem('demo-leads', JSON.stringify(updated));
           window.dispatchEvent(new CustomEvent('demo-leads-updated'));
@@ -264,10 +266,10 @@ export default function LeadList({ profile, isDemoMode, clientId, targetId, onTa
         await updateDoc(doc(db, 'leads', lead.id), {
           stage: newStage,
           updatedAt: new Date().toISOString(),
-          lastAction: `Cambiado a Fase ${newStage === 'setter' ? 'Prospección' : 'Comercial'}`
+          lastAction: `Cambiado a Fase ${newStage === 'setter' ? 'Setter' : 'Comercial'}`
         });
       }
-      toast.success(`Cambiado a Fase ${newStage === 'setter' ? 'Prospección' : 'Comercial'}`);
+      toast.success(`Cambiado a Fase ${newStage === 'setter' ? 'Setter' : 'Comercial'}`);
     } catch (error) {
       toast.error("Error al cambiar etapa");
     }
@@ -615,7 +617,7 @@ export default function LeadList({ profile, isDemoMode, clientId, targetId, onTa
             />
           </div>
           
-    <div className="flex items-center gap-2 bg-muted border border-border rounded-lg px-2 h-10">
+          <div className="flex items-center gap-2 bg-muted border border-border rounded-lg px-2 h-10">
             <Filter size={14} className="text-muted-foreground ml-1" />
             <select 
               className="bg-transparent border-none text-sm focus:outline-none transition-all text-muted-foreground font-bold pr-2 h-full cursor-pointer"
@@ -623,8 +625,8 @@ export default function LeadList({ profile, isDemoMode, clientId, targetId, onTa
               onChange={(e) => setStageFilter(e.target.value)}
             >
               <option value="all">Todas las etapas</option>
-              <option value="setter">Prospección</option>
-              <option value="commercial">Comercial</option>
+              <option value="setter">Fase Setter</option>
+              <option value="commercial">Fase Comercial</option>
             </select>
           </div>
 

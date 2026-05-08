@@ -1,4 +1,4 @@
-export type UserRole = 'director' | 'account_manager' | 'client';
+export type UserRole = 'setter' | 'commercial' | 'director' | 'account_manager' | 'client';
 
 export interface UserProfile {
   uid: string;
@@ -18,7 +18,7 @@ export type LeadStatus = 'new' | 'contacted' | 'follow-up' | 'meeting-scheduled'
 export interface FollowUp {
   id: string;
   date: string;
-  type: UserRole;
+  type: 'setter' | 'commercial';
   note: string;
   authorId: string;
   authorName: string;

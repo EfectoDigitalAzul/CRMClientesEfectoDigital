@@ -71,9 +71,6 @@ export default function FollowUpCenter({ profile, clientId, isDemoMode, onLeadCl
       const leadsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
       setLeads(leadsData);
       setLoading(false);
-    }, (error) => {
-      console.error("Error fetching leads in FollowUpCenter:", error);
-      setLoading(false);
     });
 
     return () => unsubscribe();
@@ -91,7 +88,7 @@ export default function FollowUpCenter({ profile, clientId, isDemoMode, onLeadCl
     const newFollowUp: FollowUp = {
       id: Math.random().toString(36).substr(2, 9),
       date: today,
-      type: profile?.role === 'director' ? 'director' : 'account_manager',
+      type: profile?.role === 'commercial' ? 'commercial' : 'setter',
       note: note || (action === 'done' ? 'Seguimiento realizado' : action === 'not-interested' ? 'Sin interés' : 'A futuro'),
       authorId: profile?.uid || 'system',
       authorName: profile?.displayName || 'Sistema'
@@ -160,6 +157,8 @@ export default function FollowUpCenter({ profile, clientId, isDemoMode, onLeadCl
     if (l.status !== 'follow-up' || !l.nextFollowUpDate) return false;
     
     // Filter by stage based on role for "real" actionable data
+    if (profile?.role === 'setter' && l.stage !== 'setter') return false;
+    if (profile?.role === 'commercial' && l.stage !== 'commercial') return false;
     if (profile?.role === 'client') return false;
 
     const nextDate = parseISO(l.nextFollowUpDate);

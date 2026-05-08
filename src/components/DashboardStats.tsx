@@ -641,48 +641,6 @@ export default function DashboardStats({ profile, isDemoMode, clientId }: Dashbo
             valueColor="text-emerald-600"
           />
         );
-      case 'table-monthly-comparison':
-        return (
-          <Card className="border border-border/40 rounded-[2rem] shadow-none bg-card/40 backdrop-blur-sm overflow-hidden h-full">
-            <CardHeader className="border-b border-border/40 px-8 py-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg font-black text-foreground uppercase italic tracking-tighter">Comparativa Mensual</CardTitle>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase opacity-70">Desempeño de campañas y reuniones por mes</p>
-                </div>
-                <TrendingUp size={18} className="text-primary opacity-50" />
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow className="hover:bg-transparent border-none">
-                    <TableHead className="text-[10px] font-black uppercase text-muted-foreground px-8">Mes</TableHead>
-                    <TableHead className="text-[10px] font-black uppercase text-muted-foreground text-center">Interesados</TableHead>
-                    <TableHead className="text-[10px] font-black uppercase text-muted-foreground text-center">Reuniones</TableHead>
-                    <TableHead className="text-[10px] font-black uppercase text-muted-foreground text-center">Cierres</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {stats.monthlyComparison.map((m: any) => (
-                    <TableRow key={m.name} className="hover:bg-primary/5 transition-colors border-border/40">
-                      <TableCell className="px-8 font-black text-xs uppercase tracking-tight">{m.name}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="secondary" className="bg-blue-500/10 text-blue-500 border-none font-black text-[10px]">{m.leads}</Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="secondary" className="bg-purple-500/10 text-purple-500 border-none font-black text-[10px]">{m.reuniones}</Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-500 border-none font-black text-[10px]">{m.cierres}</Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        );
       case 'widget-ai':
         return <DashboardAIInsights leads={currentLeads} meetings={currentMeetings} />;
       case 'chart-funnel':

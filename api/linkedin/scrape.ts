@@ -1,15 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Initialize Gemini
-const ai = new GoogleGenAI({
-  apiKey: process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
-  }
-});
-
 export default async function handler(req: any, res: any) {
   // Add CORS headers
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -28,6 +18,22 @@ export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: "Method not allowed. Use POST." });
   }
+
+  const apiKey = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.warn("Vercel Applet Error: GEMINI_API_KEY is not defined in environment variables. Falling back to client-side heuristics.");
+    return res.status(500).json({ error: "GEMINI_API_KEY_MISSING", message: "Por favor configure la clave de API de Gemini" });
+  }
+
+  // Initialize Gemini with verified key
+  const ai = new GoogleGenAI({
+    apiKey: apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      }
+    }
+  });
 
   const { url } = req.body;
   if (!url) {

@@ -165,8 +165,28 @@ export function parseTextHeuristically(text: string): any {
     return null;
   };
 
-  // 4. Try parsing the Name (always on the first line)
-  const firstLine = lines[0] || '';
+  // Skip noise and UI garbage lines to find the true Name line
+  const cleanLines: string[] = [];
+  const uiKeywordsToSkip = [
+    'cerrar sesión', 'cerrar sesion', 'volver a linkedin', 'ver perfil', 'sign in', 'skip to', 'atrás', 'back', 
+    'linkedin', 'buscar', 'search', 'guardar', 'save', 'compartir', 'share', 'más...', 'more...',
+    'notificaciones', 'empleos', 'mi red', 'mensajes', 'inicio', 'enviar un mensaje', 'enviar mensaje',
+    'conectar', 'connect', 'sigue a', 'siguiendo', 'unirse', 'join', 'registrarse', 'register', 'página principal',
+    'pagina principal', 'tú', 'you'
+  ];
+  
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    const lower = trimmed.toLowerCase();
+    
+    const isUiLabel = uiKeywordsToSkip.some(k => lower === k || lower.startsWith(k + ' ') || lower.startsWith(k + '…') || lower.startsWith(k + '...'));
+    if (trimmed && !isUiLabel && trimmed.length > 1) {
+      cleanLines.push(trimmed);
+    }
+  }
+
+  // 4. Extract Name
+  const firstLine = cleanLines[0] || '';
   if (firstLine.includes('·') || firstLine.includes('|') || firstLine.includes('—') || firstLine.includes('–')) {
     const mainParts = firstLine.split(/[·|—–]/).map(p => p.trim()).filter(Boolean);
     if (mainParts.length >= 1) {
@@ -187,57 +207,186 @@ export function parseTextHeuristically(text: string): any {
     name = "Lead de LinkedIn";
   }
 
-  // 5. Run smart analysis lines 1..6
-  for (let idx = 1; idx < Math.min(lines.length, 6); idx++) {
-    const rawLine = lines[idx];
-    const line = cleanConnectionNoise(rawLine);
-    if (!line) continue;
+  // Helper patterns
+  const isDateOrDurationLine = (lineText: string): boolean => {
+    const lower = lineText.toLowerCase();
+    const hasYear = /\b(19|20)\d{2}\b/.test(lower);
+    const hasPresent = ['presente', 'present', 'actual', 'actualidad', 'actualmente'].some(w => lower.includes(w));
+    const hasMonth = [
+      'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
+      'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'
+    ].some(m => lower.includes(m));
+    const hasDuration = ['año', 'aaa', 'mes', 'yr', 'mont', 'mos', 'mth'].some(d => lower.includes(d));
+    return (hasYear || hasPresent) || (hasMonth && hasDuration);
+  };
 
-    // A. Search Location
-    if (!country) {
-      const locationMatch = extractCountryAndCity(line);
-      if (locationMatch) {
-        country = locationMatch;
-        continue;
+  const titleKeywords = [
+    'ceo', 'cto', 'cfo', 'coo', 'vp', 'vicepresident', 'founder', 'fundador', 'co-founder', 'cofundador', 
+    'director', 'directora', 'manager', 'gerente', 'lead', 'lider', 'líder', 'head', 'jefe', 'jefa',
+    'developer', 'programador', 'programadora', 'engineer', 'ingeniero', 'ingeniera', 'analista', 'analyst',
+    'specialist', 'especialista', 'consultant', 'consultor', 'consultora', 'designer', 'diseñador', 'diseñadora',
+    'architect', 'arquitecto', 'arquitecta', 'coordinator', 'coordinador', 'coordinadora', 'partner', 'socio', 'socia',
+    'growth', 'sales', 'ventas', 'marketing', 'comercial', 'account', 'customer', 'success', 'sistemas', 'it',
+    'desarrollador', 'desarrolladora', 'ux', 'ui', 'product', 'producto'
+  ];
+
+  const containsTitleKeyword = (lineValue: string): boolean => {
+    const normalized = lineValue.toLowerCase();
+    return titleKeywords.some(keyword => {
+      const regex = new RegExp(`\\b${keyword}\\b`, 'i');
+      return regex.test(normalized);
+    });
+  };
+
+  // 5. Look for the "Experiencia" / "Experience" Section
+  let expIdx = -1;
+  for (let i = 0; i < cleanLines.length; i++) {
+    const norm = cleanLines[i].toLowerCase();
+    if (norm === 'experiencia' || norm === 'experience' || norm === 'trayectoria laboral' || norm === 'historial laboral' || norm === 'background') {
+      expIdx = i;
+      break;
+    }
+  }
+
+  if (expIdx !== -1) {
+    const subLines = cleanLines.slice(expIdx + 1, expIdx + 12);
+    
+    // First pass: look for combined lines like "Puesto en Empresa" or "Puesto @ Empresa"
+    for (let i = 0; i < Math.min(subLines.length, 4); i++) {
+      const pc = extractPositionAndCompany(subLines[i]);
+      if (pc) {
+        position = pc.position;
+        company = pc.company;
+        // Search next lines for country
+        for (let j = i + 1; j < Math.min(subLines.length, i + 3); j++) {
+          const loc = extractCountryAndCity(subLines[j]);
+          if (loc && !isDateOrDurationLine(subLines[j])) {
+            country = loc;
+            break;
+          }
+        }
+        break;
       }
     }
-
-    // B. Search Position & Company
+    
+    // If not found as combined line, search for a date/duration anchor line
     if (!position || !company) {
-      const pcResult = extractPositionAndCompany(line);
-      if (pcResult) {
-        if (!position) position = pcResult.position;
-        if (!company) company = pcResult.company;
+      let dateLineIdx = -1;
+      for (let i = 0; i < Math.min(subLines.length, 6); i++) {
+        if (isDateOrDurationLine(subLines[i])) {
+          dateLineIdx = i;
+          break;
+        }
+      }
+      
+      if (dateLineIdx >= 1) {
+        const candy1 = subLines[dateLineIdx - 1]; // One line above (potential Company or Position)
+        const candy2 = dateLineIdx >= 2 ? subLines[dateLineIdx - 2] : ''; // Two lines above (potential Position or Company)
+        
+        const cleanCandidate = (str: string): string => {
+          if (!str) return '';
+          let res = cleanConnectionNoise(str);
+          if (res.includes('·')) res = res.split('·')[0];
+          if (res.includes('|')) res = res.split('|')[0];
+          if (res.includes('-')) {
+            const parts = res.split('-');
+            if (parts[0].trim().length > 1) {
+              res = parts[0];
+            }
+          }
+          return res.trim();
+        };
+
+        const rawComp = cleanCandidate(candy1);
+        const rawPos = cleanCandidate(candy2);
+        
+        if (rawComp && rawPos) {
+          if (containsTitleKeyword(rawComp) && !containsTitleKeyword(rawPos)) {
+            position = rawComp;
+            company = rawPos;
+          } else {
+            position = rawPos;
+            company = rawComp;
+          }
+        } else if (rawComp) {
+          if (containsTitleKeyword(rawComp)) {
+            position = rawComp;
+          } else {
+            company = rawComp;
+          }
+        }
+        
+        // Extract country/location right after the date line
+        if (dateLineIdx + 1 < subLines.length) {
+          const loc = extractCountryAndCity(subLines[dateLineIdx + 1]);
+          if (loc && !isDateOrDurationLine(subLines[dateLineIdx + 1])) {
+            country = loc;
+          }
+        }
+      } else {
+        // Fallback under Experience header
+        if (subLines.length >= 2) {
+          const l0 = cleanConnectionNoise(subLines[0]);
+          const l1 = cleanConnectionNoise(subLines[1]);
+          if (l0 && l1) {
+            position = l0;
+            company = l1;
+          }
+        }
       }
     }
   }
 
-  // Fallbacks for Position and Company if they are still empty but we have subsequent lines
-  if (!position && lines.length > 1) {
-    for (let idx = 1; idx < Math.min(lines.length, 4); idx++) {
-      const line = cleanConnectionNoise(lines[idx]);
-      const lower = line.toLowerCase();
-      const isExcluded = ['conexiones', 'mutual', 'followers', 'seguidores', 'contacto', 'contact', 'about', 'experiencia', 'ver m', 'ubicación'].some(k => lower.includes(k));
-      if (!isExcluded && line.length > 3 && line.length < 70) {
-        position = line;
-        break;
+  // 6. Header fallback logic if Experience section was not present or didn't yield enough data
+  if (!position || !company || !country) {
+    for (let idx = 1; idx < Math.min(cleanLines.length, 6); idx++) {
+      const line = cleanConnectionNoise(cleanLines[idx]);
+      if (!line) continue;
+
+      if (!country) {
+        const loc = extractCountryAndCity(line);
+        if (loc) {
+          country = loc;
+          continue;
+        }
+      }
+
+      if (!position || !company) {
+        const pcResult = extractPositionAndCompany(line);
+        if (pcResult) {
+          if (!position) position = pcResult.position;
+          if (!company) company = pcResult.company;
+        }
+      }
+    }
+
+    // Subsequent level header fallbacks
+    if (!position && cleanLines.length > 1) {
+      for (let idx = 1; idx < Math.min(cleanLines.length, 4); idx++) {
+        const line = cleanConnectionNoise(cleanLines[idx]);
+        const lower = line.toLowerCase();
+        const isExcluded = ['conexiones', 'mutual', 'followers', 'seguidores', 'contacto', 'contact', 'about', 'experiencia', 'ver m', 'ubicación'].some(k => lower.includes(k));
+        if (!isExcluded && line.length > 3 && line.length < 70) {
+          position = line;
+          break;
+        }
+      }
+    }
+
+    if (!company && cleanLines.length > 2) {
+      for (let idx = 2; idx < Math.min(cleanLines.length, 5); idx++) {
+        const line = cleanConnectionNoise(cleanLines[idx]);
+        const lower = line.toLowerCase();
+        const isExcluded = ['conexiones', 'mutual', 'followers', 'seguidores', 'contacto', 'contact', 'about', 'experiencia', 'ver m', 'ubicación'].some(k => lower.includes(k));
+        if (!isExcluded && line.length > 2 && line.length < 60 && line !== position) {
+          company = line;
+          break;
+        }
       }
     }
   }
 
-  if (!company && lines.length > 2) {
-    for (let idx = 2; idx < Math.min(lines.length, 5); idx++) {
-      const line = cleanConnectionNoise(lines[idx]);
-      const lower = line.toLowerCase();
-      const isExcluded = ['conexiones', 'mutual', 'followers', 'seguidores', 'contacto', 'contact', 'about', 'experiencia', 'ver m', 'ubicación'].some(k => lower.includes(k));
-      if (!isExcluded && line.length > 2 && line.length < 60 && line !== position) {
-        company = line;
-        break;
-      }
-    }
-  }
-
-  // Standardize position keywords
+  // Final text processing and standardization
   if (position) {
     const lowerPos = position.toLowerCase();
     if (lowerPos === 'co fou' || lowerPos === 'co-fou' || lowerPos === 'co founder' || lowerPos === 'co-founder') {

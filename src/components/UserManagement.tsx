@@ -213,17 +213,20 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
         }
       }
 
-      const userToCreate: UserProfile = {
+      const userToCreate: any = {
         uid: finalUid,
         username: lowerUsername,
         password: newUser.password,
         email: targetEmail,
         displayName: newUser.displayName,
         role: newUser.role,
-        assignedClientId: newUser.assignedClientId || undefined,
         isActive: true,
         createdAt: new Date().toISOString()
       };
+
+      if (newUser.role === 'client' && newUser.assignedClientId) {
+        userToCreate.assignedClientId = newUser.assignedClientId;
+      }
 
       if (isDemoMode) {
         console.log(`[CrearUsuario] Modo demo activo. Guardando en localStorage.`);
@@ -259,11 +262,18 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
     }
     setLoading(true);
     try {
-      const updatedUser = {
+      const updatedUser: any = {
         ...editingUser,
         username: editingUser.username?.trim().toLowerCase() || '',
         email: editingUser.email?.trim().toLowerCase() || ''
       };
+      
+      // Clean any undefined properties to prevent Firestore crash
+      Object.keys(updatedUser).forEach(key => {
+        if (updatedUser[key] === undefined) {
+          delete updatedUser[key];
+        }
+      });
       
       console.log(`[EditarUsuario] Actualizando perfil para UID: ${updatedUser.uid}`, updatedUser);
       

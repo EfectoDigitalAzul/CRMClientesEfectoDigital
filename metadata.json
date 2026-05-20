@@ -2,5 +2,7 @@
   "name": "Plataforma - Efecto Digital",
   "description": "Plataforma oficial de Efecto Digital para la gestión inteligente de leads y procesos comerciales.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

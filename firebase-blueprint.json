@@ -64,7 +64,11 @@
         "clientId": { "type": "string" },
         "content": { "type": "string" },
         "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
         "date": { "type": "string" },
+        "type": { "type": "string", "enum": ["note", "milestone", "blocker", "advance"] },
+        "isResolved": { "type": "boolean" },
+        "createdAt": { "type": "string" },
         "attachments": {
           "type": "array",
           "items": {

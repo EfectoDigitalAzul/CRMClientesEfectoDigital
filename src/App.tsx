@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db, loginWithGoogle, logout, isFirebaseConfigured, handleFirestoreError, OperationType } from './lib/firebase';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { onAuthStateChanged, User, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot, collection, query, where, orderBy, getDocs, updateDoc, deleteDoc } from 'firebase/firestore';
 import { UserProfile, Lead, UserRole, Client, Meeting } from './types';
 import { Button } from './components/ui/button';
@@ -691,6 +691,31 @@ export default function App() {
           if (!isFirebaseConfigured) {
             setIsDemoMode(true);
           }
+          
+          // Sincronizar con Firebase Auth si está disponible para tener token de seguridad activo
+          if (isFirebaseConfigured && foundProfile.email && foundProfile.password) {
+            try {
+              console.log("Intentando iniciar sesión en Firebase Auth para sincronización:", foundProfile.email);
+              await signInWithEmailAndPassword(auth, foundProfile.email, foundProfile.password);
+              console.log("Sincronización exitosa con Firebase Auth.");
+            } catch (authError: any) {
+              console.warn("Error al sincronizar directamente, intentando registrar cuenta de Auth faltante:", authError);
+              const isUserNotFound = authError.code === 'auth/user-not-found' || 
+                                    authError.code === 'auth/invalid-credential' || 
+                                    authError.message?.includes('user-not-found') ||
+                                    authError.message?.includes('INVALID_LOGIN_CREDENTIALS');
+              if (isUserNotFound) {
+                try {
+                  console.log("Registrando y autenticando usuario faltante en Firebase Auth...");
+                  await createUserWithEmailAndPassword(auth, foundProfile.email, foundProfile.password);
+                  console.log("Auto-registro exitoso.");
+                } catch (regError: any) {
+                  console.error("No se pudo auto-registrar el usuario en Firebase Auth:", regError);
+                }
+              }
+            }
+          }
+
           setProfile(foundProfile);
           toast.success(`Bienvenido, ${foundProfile.displayName}`);
         }
@@ -702,6 +727,29 @@ export default function App() {
         if (!querySnap.empty) {
           const data = { uid: querySnap.docs[0].id, ...querySnap.docs[0].data() } as UserProfile;
           if (data.isActive) {
+            // Sincronizar con Firebase Auth para este caso también
+            if (data.email && data.password) {
+              try {
+                console.log("Intentando iniciar sesión en Firebase Auth para sincronización:", data.email);
+                await signInWithEmailAndPassword(auth, data.email, data.password);
+                console.log("Sincronización exitosa con Firebase Auth.");
+              } catch (authError: any) {
+                console.warn("Error de sincronización, auto-registrando:", authError);
+                const isUserNotFound = authError.code === 'auth/user-not-found' || 
+                                      authError.code === 'auth/invalid-credential' || 
+                                      authError.message?.includes('user-not-found') ||
+                                      authError.message?.includes('INVALID_LOGIN_CREDENTIALS');
+                if (isUserNotFound) {
+                  try {
+                    await createUserWithEmailAndPassword(auth, data.email, data.password);
+                    console.log("Auto-registro exitoso.");
+                  } catch (regError: any) {
+                    console.error("Error al auto-registrar:", regError);
+                  }
+                }
+              }
+            }
+
             setProfile(data);
             toast.success(`Bienvenido, ${data.displayName}`);
           } else {

@@ -1,5 +1,5 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { initializeApp, deleteApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, createUserWithEmailAndPassword } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, getDoc, updateDoc, addDoc, query, where, onSnapshot, orderBy, Timestamp } from 'firebase/firestore';
 
 // Placeholder config - will be replaced by firebase-applet-config.json if it exists
@@ -63,4 +63,29 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   }
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
+}
+
+export async function createFirebaseAuthUser(email: string, pass: string): Promise<string> {
+  if (!isFirebaseConfigured) {
+    throw new Error("Firebase configuration is missing or PLACEHOLDER");
+  }
+  
+  // Choose config
+  const activeConfig = configData || firebaseConfig;
+  
+  // Create unique secondary application name to prevent conflicts
+  const tempAppName = `temp-app-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+  const tempApp = initializeApp(activeConfig, tempAppName);
+  const tempAuth = getAuth(tempApp);
+  
+  try {
+    const userCredential = await createUserWithEmailAndPassword(tempAuth, email, pass);
+    if (!userCredential.user) {
+      throw new Error("No user object returned from Firebase Auth creation.");
+    }
+    return userCredential.user.uid;
+  } finally {
+    // Delete the temporary app so that it clears connections and memory
+    await deleteApp(tempApp);
+  }
 }

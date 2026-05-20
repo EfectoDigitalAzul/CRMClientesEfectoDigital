@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType, createFirebaseAuthUser, isFirebaseConfigured } from '../lib/firebase';
 import { collection, onSnapshot, doc, updateDoc, query, orderBy, deleteDoc, setDoc } from 'firebase/firestore';
 import { UserProfile, UserRole, Client } from '../types';
 import { 
@@ -188,13 +188,36 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
       toast.error("El nombre es obligatorio");
       return;
     }
+    
     setLoading(true);
     try {
+      const targetEmail = lowerEmail || (newUser.role === 'client' ? `${lowerUsername}@cliente.efectodigital.com.ar` : '');
+      const targetPassword = newUser.password || 'Efecto2026!';
+      
+      let finalUid = newUser.role === 'client' ? `u-${lowerUsername}` : `u-staff-${lowerUsername || Math.random().toString(36).substr(2, 5)}`;
+      
+      if (!isDemoMode && isFirebaseConfigured) {
+        try {
+          console.log(`[CrearUsuario] Registrando en Firebase Auth para: ${targetEmail}`);
+          const authUid = await createFirebaseAuthUser(targetEmail, targetPassword);
+          console.log(`[CrearUsuario] Firebase Auth exitoso. UID generado: ${authUid}`);
+          finalUid = authUid;
+        } catch (authError: any) {
+          console.error("[CrearUsuario] Error al crear usuario en Firebase Authentication:", authError);
+          // Permitir continuar si ya existe, imprimiendo advertencia
+          if (authError.code === 'auth/email-already-in-use' || authError.message?.includes('EMAIL_EXISTS')) {
+            console.warn("[CrearUsuario] El correo electrónico ya está registrado en Firebase Auth. Intentando crear en Firestore con UID anterior.");
+          } else {
+            throw new Error(`Firebase Auth: ${authError.message || authError}`);
+          }
+        }
+      }
+
       const userToCreate: UserProfile = {
-        uid: newUser.role === 'client' ? `u-${lowerUsername}` : `u-staff-${lowerUsername || Math.random().toString(36).substr(2, 5)}`,
+        uid: finalUid,
         username: lowerUsername,
         password: newUser.password,
-        email: lowerEmail || (newUser.role === 'client' ? `${lowerUsername}@cliente.efectodigital.com.ar` : ''),
+        email: targetEmail,
         displayName: newUser.displayName,
         role: newUser.role,
         assignedClientId: newUser.assignedClientId || undefined,
@@ -203,6 +226,7 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
       };
 
       if (isDemoMode) {
+        console.log(`[CrearUsuario] Modo demo activo. Guardando en localStorage.`);
         const stored = localStorage.getItem('demo-users');
         const demoUsers = stored ? JSON.parse(stored) : users;
         const updatedUsers = [...demoUsers, userToCreate];
@@ -211,14 +235,17 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
         window.dispatchEvent(new CustomEvent('demo-users-updated'));
       } else {
         // En Firebase real, creamos el documento. 
-        // El usuario deberá registrarse con este mismo email para heredar el perfil.
-        await setDoc(doc(db, 'users', userToCreate.uid), userToCreate);
+        console.log(`[CrearUsuario] Escribiendo perfil en Firestore para la colección 'users/${finalUid}':`, userToCreate);
+        await setDoc(doc(db, 'users', finalUid), userToCreate);
+        console.log(`[CrearUsuario] Escritura en Firestore completa.`);
       }
+      
       toast.success("Perfil de acceso creado correctamente");
       setIsAddUserOpen(false);
       setNewUser({ email: '', username: '', password: '', displayName: '', role: 'client', assignedClientId: '' });
-    } catch (error) {
-      toast.error("Error al crear perfil");
+    } catch (error: any) {
+      console.error("[CrearUsuario] ERROR CRÍTICO AL CREAR PERFIL:", error);
+      toast.error(`Error al crear perfil: ${error.message || error}`);
     } finally {
       setLoading(false);
     }
@@ -238,6 +265,8 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
         email: editingUser.email?.trim().toLowerCase() || ''
       };
       
+      console.log(`[EditarUsuario] Actualizando perfil para UID: ${updatedUser.uid}`, updatedUser);
+      
       if (isDemoMode) {
         const stored = localStorage.getItem('demo-users');
         const demoUsers = stored ? JSON.parse(stored) : users;
@@ -247,11 +276,13 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
         window.dispatchEvent(new CustomEvent('demo-users-updated'));
       } else {
         await updateDoc(doc(db, 'users', updatedUser.uid), updatedUser as any);
+        console.log(`[EditarUsuario] Firestore actualizado para UID: ${updatedUser.uid}`);
       }
       toast.success("Perfil actualizado correctamente");
       setIsEditUserOpen(false);
-    } catch (error) {
-      toast.error("Error al actualizar perfil");
+    } catch (error: any) {
+      console.error("[EditarUsuario] ERROR CRÍTICO AL EDITAR PERFIL:", error);
+      toast.error(`Error al actualizar perfil: ${error.message || error}`);
     } finally {
       setLoading(false);
     }

@@ -19,6 +19,7 @@ import {
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Input } from './ui/input';
+import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Badge } from './ui/badge';
@@ -862,23 +863,25 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
                       <div className="flex flex-col gap-2 p-3 rounded-lg border border-border/50 bg-muted/50">
                         <div className="flex items-center gap-2">
                           <FileText size={14} className="text-muted-foreground" />
-                          <span className="text-xs font-medium text-foreground">Enriquecer con Texto (Ctrl+C / Ctrl+V)</span>
+                          <span className="text-xs font-medium text-foreground">Enriquecer con Texto completo (Ctrl+C / Ctrl+V)</span>
                         </div>
-                        <div className="flex gap-2">
-                          <Input 
-                            id="pastedTextDetails"
-                            value={pastedText}
-                            onChange={(e) => setPastedText(e.target.value)}
-                            placeholder="Pega el perfil o CV completo aquí..."
-                            className="bg-muted border-border text-xs h-7 py-1 px-2 flex-grow"
-                            disabled={parsingText}
-                          />
+                        <div className="flex gap-2 items-start">
+                          <div className="flex-grow">
+                            <Textarea 
+                              id="pastedTextDetails"
+                              value={pastedText}
+                              onChange={(e) => setPastedText(e.target.value)}
+                              placeholder="Pega aquí todo el texto copiado de su perfil o CV..."
+                              className="bg-muted border-border text-xs min-h-[50px] max-h-[100px] py-1 px-2"
+                              disabled={parsingText}
+                            />
+                          </div>
                           <Button 
                             onClick={() => enrichWithText(pastedText)}
                             disabled={parsingText || !pastedText.trim()}
-                            className="h-7 px-3 flex items-center justify-center text-[10px] font-bold bg-primary text-primary-foreground rounded-md hover:bg-primary/90 shrink-0"
+                            className="h-9 px-3 flex items-center justify-center text-xs font-bold bg-primary text-primary-foreground rounded-md hover:bg-primary/90 shrink-0 self-end"
                           >
-                            {parsingText ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                            {parsingText ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                           </Button>
                         </div>
                       </div>

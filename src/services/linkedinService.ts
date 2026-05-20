@@ -45,146 +45,199 @@ export function parseTextHeuristically(text: string): any {
     contactInfo = phoneMatch[0];
   }
 
-  // Helpers for cleaning the connection level indicators or other LinkedIn noise
+  // Helpers for cleaning connection level indicators or other LinkedIn noise
   const cleanConnectionNoise = (str: string): string => {
     return str
-      .replace(/\b(1st|2nd|3rd|1er|2do|3er|1\.º|2\.º|3\.º)\b/gi, '')
-      .replace(/\b(conexi[oó]n|connections|connection|following|seguidores|mutual|contacto|contact|info|enviar|mensaje)\b/gi, '')
-      .replace(/^\s*·\s*/, '')
-      .replace(/\s*·\s*$/, '')
+      .replace(/\b(?:1st|2nd|3rd|1er|2do|3er|1\.º|2\.º|3\.º)\b/gi, '')
+      .replace(/\b(?:conexi[oó]n|connections|connection|following|seguidores|mutual|contacto|contact|info|enviar|mensaje)\b/gi, '')
+      .replace(/^\s*[·|•-]\s*/, '')
+      .replace(/\s*[·|•-]\s*$/, '')
       .trim();
   };
 
-  // 4. Try parsing the FIRST LINE
+  // Helper to split a line into Position and Company
+  const extractPositionAndCompany = (lineText: string): { position: string; company: string } | null => {
+    if (!lineText) return null;
+    
+    // First, split by major structural separators
+    const structuralParts = lineText.split(/\s*(?:\||[-–—•\t])\s*/).map(p => p.trim()).filter(Boolean);
+    const candidate = structuralParts[0] || '';
+    
+    // Next, check if the candidate contains sub-separators like "en", "at", "de", "@"
+    const subSeps = [
+      /\s+(?:en|at|de|in|of)\s+/i,
+      /\s*@\s*/
+    ];
+    
+    for (const sep of subSeps) {
+      if (sep.test(candidate)) {
+        const parts = candidate.split(sep).map(p => p.trim()).filter(Boolean);
+        if (parts.length >= 2) {
+          return {
+            position: parts[0],
+            company: parts[1]
+          };
+        }
+      }
+    }
+    
+    // Fallback: If we have multiple structural parts, the first is likely position and the second is company
+    if (structuralParts.length >= 2) {
+      const posCand = structuralParts[0];
+      const compCand = structuralParts[1];
+      if (posCand.length > 2 && posCand.length < 60 && compCand.length > 2 && compCand.length < 60) {
+        // Exclude descriptive text as company name
+        const isDescriptive = ['liderando', 'ayudando', 'conduciendo', 'crecimiento', 'ventas', 'especialista'].some(w => compCand.toLowerCase().includes(w));
+        if (!isDescriptive) {
+          return {
+            position: posCand,
+            company: compCand
+          };
+        }
+      }
+    }
+    
+    return null;
+  };
+
+  // Helper to extract country and city
+  const extractCountryAndCity = (lineText: string): string | null => {
+    if (!lineText) return null;
+    
+    const locationKeywords = [
+      { names: ['argentina'], display: 'Argentina' },
+      { names: ['españa', 'spain'], display: 'España' },
+      { names: ['méxico', 'mexico', 'cdmx'], display: 'México' },
+      { names: ['colombia'], display: 'Colombia' },
+      { names: ['chile'], display: 'Chile' },
+      { names: ['perú', 'peru'], display: 'Perú' },
+      { names: ['venezuela'], display: 'Venezuela' },
+      { names: ['uruguay'], display: 'Uruguay' },
+      { names: ['paraguay'], display: 'Paraguay' },
+      { names: ['bolivia'], display: 'Bolivia' },
+      { names: ['ecuador'], display: 'Ecuador' },
+      { names: ['panamá', 'panama'], display: 'Panamá' },
+      { names: ['costa rica'], display: 'Costa Rica' },
+      { names: ['dominicana', 'república dominicana', 'republica dominicana', 'santo domingo'], display: 'República Dominicana' },
+      { names: ['puerto rico'], display: 'Puerto Rico' },
+      { names: ['guatemala'], display: 'Guatemala' },
+      { names: ['honduras'], display: 'Honduras' },
+      { names: ['el salvador', 'salvador'], display: 'El Salvador' },
+      { names: ['nicaragua'], display: 'Nicaragua' },
+      { names: ['cuba'], display: 'Cuba' },
+      { names: ['estados unidos', 'usa', 'united states', 'ee.uu', 'eeuu', 'florida', 'miami', 'new york', 'california'], display: 'Estados Unidos' },
+      { names: ['brasil', 'brazil'], display: 'Brasil' },
+      { names: ['portugal'], display: 'Portugal' },
+      { names: ['italia', 'italy'], display: 'Italia' },
+      { names: ['francia', 'france'], display: 'Francia' },
+      { names: ['alemania', 'germany'], display: 'Alemania' },
+      { names: ['london', 'londres', 'united kingdom', 'reino unido', 'uk'], display: 'Reino Unido' },
+      { names: ['suecia', 'sweden'], display: 'Suecia' },
+      { names: ['suiza', 'switzerland'], display: 'Suiza' },
+      { names: ['canadá', 'canada'], display: 'Canadá' }
+    ];
+
+    const lowerLine = lineText.toLowerCase();
+    for (const item of locationKeywords) {
+      if (item.names.some(n => lowerLine.includes(n))) {
+        let cleaned = cleanConnectionNoise(lineText);
+        // Filter out extraneous text after details separator
+        if (cleaned.includes('·')) {
+          cleaned = cleaned.split('·')[0].trim();
+        }
+        return cleaned; // e.g. "Santo Domingo, República Dominicana" or "República Dominicana"
+      }
+    }
+    
+    // Check if it looks explicitly like a location line
+    const locationClues = ['ubicación', 'location', 'área de', 'area de', 'área metropolitana', 'greater', 'provincia', 'departamento'];
+    if (locationClues.some(clue => lowerLine.includes(clue)) && lineText.length < 80) {
+      let cleaned = cleanConnectionNoise(lineText)
+        .replace(/^\s*Ubicaci[oó]n:\s*/i, '')
+        .replace(/^\s*Location:\s*/i, '')
+        .trim();
+      if (cleaned.includes('·')) {
+        cleaned = cleaned.split('·')[0].trim();
+      }
+      return cleaned;
+    }
+    
+    return null;
+  };
+
+  // 4. Try parsing the Name (always on the first line)
   const firstLine = lines[0] || '';
-  
-  // If first line contains separators (·, |, -, —)
   if (firstLine.includes('·') || firstLine.includes('|') || firstLine.includes('—') || firstLine.includes('–')) {
     const mainParts = firstLine.split(/[·|—–]/).map(p => p.trim()).filter(Boolean);
     if (mainParts.length >= 1) {
       name = mainParts[0];
-      name = name.replace(/\s*\(.*\)\s*/g, ''); // remove parental parentheses e.g. (He/Him)
-      name = name.replace(/,\s*(PMP|PhD|MBA|MSc|Jr|Sr).*$/i, ''); // remove titles
-      
-      // Look at the second part for connection indicator & position / company
-      if (mainParts.length >= 2) {
-        let secondPart = cleanConnectionNoise(mainParts[1]);
-        if (secondPart) {
-          // Check for sub-separators en/at/@/de
-          const subSeps = [/\s+en\s+/i, /\s+at\s+/i, /\s*@\s*/, /\s+de\s+/i, /\s+of\s+/i];
-          let matchedSub = false;
-          for (const sep of subSeps) {
-            if (sep.test(secondPart)) {
-              const subParts = secondPart.split(sep);
-              if (subParts.length >= 2) {
-                position = subParts[0].trim();
-                company = subParts[1].trim();
-                matchedSub = true;
-                break;
-              }
-            }
-          }
-          if (!matchedSub) {
-            position = secondPart;
-          }
-        }
-      }
-      
-      // Look at third part if present (often has company or location)
-      if (mainParts.length >= 3 && !company) {
-        const thirdPart = cleanConnectionNoise(mainParts[2]);
-        if (thirdPart && thirdPart.length < 50) {
-          company = thirdPart;
-        }
-      }
     }
   } else {
-    // If first line is simple, check if it contains "en" or "at" or "de"
-    const simpleSeps = [/\s+en\s+/i, /\s+at\s+/i, /\s*@\s*/, /\s*\|\s*/, /\s+de\s+/i];
-    let matchedSimple = false;
-    for (const sep of simpleSeps) {
-      if (sep.test(firstLine)) {
-        const parts = firstLine.split(sep);
-        if (parts.length >= 2 && parts[0].split(/\s+/).length <= 4) {
-          name = parts[0].trim();
-          position = parts[1].trim();
-          matchedSimple = true;
-          break;
-        }
-      }
-    }
-    if (!matchedSimple) {
-      name = firstLine;
-    }
+    name = firstLine;
+  }
+  
+  if (name) {
+    name = cleanConnectionNoise(name)
+      .replace(/\s*\(.*\)\s*/g, '') // remove parentheses e.g. (He/Him)
+      .replace(/,\s*(?:PMP|PhD|MBA|MSc|Jr|Sr).*$/i, '') // remove credentials
+      .trim();
   }
 
-  // 5. Look for country, position, and company in subsequent lines
-  const locationKeywords = [
-    'argentina', 'españa', 'spain', 'méxico', 'mexico', 'colombia', 'chile', 'perú', 'peru', 
-    'venezuela', 'uruguay', 'paraguay', 'bolivia', 'ecuador', 'panamá', 'panama', 'costa rica',
-    'estados unidos', 'usa', 'united states', 'miami', 'madrid', 'barcelona', 'buenos aires',
-    'bogota', 'lima', 'santiago', 'cdmx', 'guadalajara', 'london', 'londres'
-  ];
+  if (!name || name.length < 2) {
+    name = "Lead de LinkedIn";
+  }
 
+  // 5. Run smart analysis lines 1..6
   for (let idx = 1; idx < Math.min(lines.length, 6); idx++) {
     const rawLine = lines[idx];
     const line = cleanConnectionNoise(rawLine);
     if (!line) continue;
 
-    // A. Identify Location
+    // A. Search Location
     if (!country) {
-      if (locationKeywords.some(keyword => line.toLowerCase().includes(keyword)) && line.length < 60) {
-        country = line.replace(/^\s*Ubicaci[oó]n:\s*/i, '').replace(/^\s*Location:\s*/i, '');
+      const locationMatch = extractCountryAndCity(line);
+      if (locationMatch) {
+        country = locationMatch;
         continue;
       }
     }
 
-    // B. Identify Position & Company if not already filled
+    // B. Search Position & Company
     if (!position || !company) {
-      const separators = [/\s+en\s+/i, /\s+at\s+/i, /\s*@\s*/, /\s*\|\s*/, /\s+de\s+/i];
-      let matchedLine = false;
-      for (const sep of separators) {
-        if (sep.test(line)) {
-          const parts = line.split(sep);
-          if (parts.length >= 2) {
-            const posCand = parts[0].trim();
-            const compCand = parts[1].trim();
-            if (posCand.length > 2 && posCand.length < 80 && compCand.length > 2 && compCand.length < 80) {
-              if (!position) position = posCand;
-              if (!company) company = compCand;
-              matchedLine = true;
-              break;
-            }
-          }
-        }
-      }
-
-      // If no separator matched, use line as position or company
-      if (!matchedLine && line.length < 70) {
-        const lowerLine = line.toLowerCase();
-        const isExcluded = ['conexiones', 'mutual', 'followers', 'seguidores', 'contacto', 'contact', 'about', 'experiencia', 'ver m[aá]s'].some(k => lowerLine.includes(k));
-        if (!isExcluded) {
-          if (!position) {
-            position = line;
-          } else if (!company && line !== position) {
-            company = line;
-          }
-        }
+      const pcResult = extractPositionAndCompany(line);
+      if (pcResult) {
+        if (!position) position = pcResult.position;
+        if (!company) company = pcResult.company;
       }
     }
   }
 
-  // Form sanitization and friendly defaults
-  if (name) {
-    name = cleanConnectionNoise(name);
-    // Remove trailing single special chars or connection leftovers
-    name = name.replace(/\s*·\s*$/, '').trim();
-  }
-  if (!name || name.length < 2) {
-    name = "Lead de LinkedIn";
+  // Fallbacks for Position and Company if they are still empty but we have subsequent lines
+  if (!position && lines.length > 1) {
+    for (let idx = 1; idx < Math.min(lines.length, 4); idx++) {
+      const line = cleanConnectionNoise(lines[idx]);
+      const lower = line.toLowerCase();
+      const isExcluded = ['conexiones', 'mutual', 'followers', 'seguidores', 'contacto', 'contact', 'about', 'experiencia', 'ver m', 'ubicación'].some(k => lower.includes(k));
+      if (!isExcluded && line.length > 3 && line.length < 70) {
+        position = line;
+        break;
+      }
+    }
   }
 
-  // Humanize short forms in title
+  if (!company && lines.length > 2) {
+    for (let idx = 2; idx < Math.min(lines.length, 5); idx++) {
+      const line = cleanConnectionNoise(lines[idx]);
+      const lower = line.toLowerCase();
+      const isExcluded = ['conexiones', 'mutual', 'followers', 'seguidores', 'contacto', 'contact', 'about', 'experiencia', 'ver m', 'ubicación'].some(k => lower.includes(k));
+      if (!isExcluded && line.length > 2 && line.length < 60 && line !== position) {
+        company = line;
+        break;
+      }
+    }
+  }
+
+  // Standardize position keywords
   if (position) {
     const lowerPos = position.toLowerCase();
     if (lowerPos === 'co fou' || lowerPos === 'co-fou' || lowerPos === 'co founder' || lowerPos === 'co-founder') {

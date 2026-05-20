@@ -19,6 +19,7 @@ import {
 } from './ui/select';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
 import { Linkedin, Sparkles, Loader2, UserCheck, UserCog, Calendar, FileText, Upload } from 'lucide-react';
@@ -247,12 +248,12 @@ export default function LeadForm({ open, onOpenChange, isDemoMode, clientId }: L
           <DialogTitle className="text-foreground">Agregar Nuevo Lead</DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-4 py-4 border-b border-border/50 mb-2">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="linkedin" className="flex items-center gap-2 text-primary font-bold">
-                <Linkedin size={16} />
-                Auto-completar URL
+        <div className="space-y-4 py-3 border-b border-border/50 mb-2">
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="linkedin" className="flex items-center gap-2 text-primary font-bold text-xs">
+                <Linkedin size={14} />
+                Auto-completar desde URL de LinkedIn
               </Label>
               <div className="flex gap-2">
                 <Input 
@@ -260,46 +261,48 @@ export default function LeadForm({ open, onOpenChange, isDemoMode, clientId }: L
                   value={linkedinUrl} 
                   onChange={(e) => setLinkedinUrl(e.target.value)} 
                   placeholder="https://www.linkedin.com/in/usuario/"
-                  className="bg-muted border-border"
+                  className="bg-muted border-border h-9 text-xs"
                 />
                 <Button 
                   type="button" 
                   onClick={handleScrape} 
                   disabled={scraping || !linkedinUrl}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 shrink-0"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 shrink-0 h-9 px-3 text-xs"
                 >
-                  {scraping ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
+                  {scraping ? <Loader2 className="animate-spin" size={14} /> : <div className="flex items-center gap-1"><Sparkles size={14} /><span>Autollenar</span></div>}
                 </Button>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="pastedText" className="flex items-center gap-2 text-primary font-bold">
-                <FileText size={16} />
-                Pegar Perfil / CV (Ctrl+C / Ctrl+V)
+            <div className="space-y-1.5">
+              <Label htmlFor="pastedText" className="flex items-center gap-2 text-primary font-bold text-xs">
+                <FileText size={14} />
+                Pegar Perfil / CV Completo (Múltiples Líneas)
               </Label>
-              <div className="flex gap-2">
-                <Input 
-                  id="pastedText"
-                  value={pastedText}
-                  onChange={(e) => setPastedText(e.target.value)}
-                  placeholder="Pega el texto de LinkedIn o CV aquí..."
-                  className="bg-muted border-border"
-                  disabled={parsingText}
-                />
+              <div className="flex gap-2 items-start">
+                <div className="flex-grow">
+                  <Textarea 
+                    id="pastedText"
+                    value={pastedText}
+                    onChange={(e) => setPastedText(e.target.value)}
+                    placeholder="Pega todo el texto copiado de LinkedIn o CV aquí..."
+                    className="bg-muted border-border min-h-[60px] max-h-[120px] text-xs py-1.5"
+                    disabled={parsingText}
+                  />
+                </div>
                 <Button 
                   type="button" 
                   onClick={handleAnalyzeText} 
                   disabled={parsingText || !pastedText.trim()}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 shrink-0"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 shrink-0 h-9 px-3 text-xs self-end"
                 >
-                  {parsingText ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
+                  {parsingText ? <Loader2 className="animate-spin" size={14} /> : <div className="flex items-center gap-1"><Sparkles size={14} /><span>Procesar</span></div>}
                 </Button>
               </div>
             </div>
           </div>
           <p className="text-[10px] text-muted-foreground italic text-center">
-            Pega el enlace de LinkedIn o copia todo el texto de su perfil / CV (Ctrl+A y Ctrl+C) y pégalo en el recuadro para que la IA complete los datos automáticamente.
+            Pega el enlace de LinkedIn para autollenar, o copia todo el texto de su perfil (Ctrl+A y Ctrl+C en su perfil) y pégalo arriba para que la IA complete el formulario.
           </p>
         </div>
 

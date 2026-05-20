@@ -80,15 +80,16 @@ app.post("/api/linkedin/analyze-pdf", async (req, res) => {
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
-      contents: [
-        {
-          inlineData: {
-            mimeType: "application/pdf",
-            data: base64Data
-          }
-        },
-        {
-          text: `Extrae la información profesional de este currículum o perfil de LinkedIn en PDF.
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              mimeType: "application/pdf",
+              data: base64Data
+            }
+          },
+          {
+            text: `Extrae la información profesional de este currículum o perfil de LinkedIn en PDF.
           
           IMPORTANTE: La empresa y el cargo deben ser los ÚLTIMOS que aparezcan en su listado de experiencia laboral (la experiencia más reciente o actual).
           
@@ -102,8 +103,9 @@ app.post("/api/linkedin/analyze-pdf", async (req, res) => {
             "position": "Cargo actual específico (último en su experiencia)",
             "contactInfo": "Email o teléfono si aparece"
           }`
-        }
-      ],
+          }
+        ]
+      },
       config: {
         systemInstruction: "Eres un experto en reclutamiento y prospección B2B. Tu objetivo es extraer datos precisos de perfiles de LinkedIn en formato PDF, priorizando siempre la experiencia más reciente.",
         responseMimeType: "application/json",

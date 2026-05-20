@@ -2,7 +2,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 
 // Initialize Gemini
 const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
+  apiKey: process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY,
   httpOptions: {
     headers: {
       'User-Agent': 'aistudio-build',
@@ -39,7 +39,7 @@ export default async function handler(req: any, res: any) {
     const slug = slugMatch ? slugMatch[1] : "";
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: `Analiza exhaustivamente este perfil de LinkedIn: ${url} (Slug: ${slug})
       
       TAREA: 

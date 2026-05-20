@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db, auth } from '../lib/firebase';
 import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
 import { LeadStatus, Client } from '../types';
-import { scrapeLinkedInProfile, analyzeLinkedInPDF } from '../services/linkedinService';
+import { scrapeLinkedInProfile, analyzeProfessionalText } from '../services/linkedinService';
 import { 
   Dialog, 
   DialogContent, 
@@ -34,7 +34,8 @@ export default function LeadForm({ open, onOpenChange, isDemoMode, clientId }: L
   const [loading, setLoading] = useState(false);
   const [scraping, setScraping] = useState(false);
   const [linkedinUrl, setLinkedinUrl] = useState('');
-  const [parsingPdf, setParsingPdf] = useState(false);
+  const [pastedText, setPastedText] = useState('');
+  const [parsingText, setParsingText] = useState(false);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     name: '',
@@ -117,50 +118,52 @@ export default function LeadForm({ open, onOpenChange, isDemoMode, clientId }: L
     }
   };
 
-  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (file.type !== 'application/pdf') {
-      toast.error("Por favor sube un archivo PDF");
+  const handleAnalyzeText = async () => {
+    if (!pastedText || !pastedText.trim()) {
+      toast.error("Por favor pega algo de texto primero");
       return;
     }
 
-    setParsingPdf(true);
-    const toastId = toast.loading("Analizando PDF...");
+    setParsingText(true);
+    const toastId = toast.loading("Analizando texto con IA...");
 
     try {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64 = (reader.result as string).split(',')[1];
-        const data = await analyzeLinkedInPDF(base64);
+      const data = await analyzeProfessionalText(pastedText);
+      
+      if (data) {
+        setFormData(prev => ({
+          ...prev,
+          name: data.name && data.name !== 'No especificado' && data.name !== 'Nombre' ? data.name : prev.name,
+          company: data.company && data.company !== 'No especificado' && data.company !== 'Empresa' ? data.company : prev.company,
+          country: data.country && data.country !== 'No especificado' && data.country !== 'País' ? data.country : prev.country,
+          sector: data.sector && data.sector !== 'No especificado' && data.sector !== 'Industria' ? data.sector : prev.sector,
+          position: data.position && data.position !== 'No especificado' && data.position !== 'Cargo' ? data.position : prev.position,
+          interest: data.interest && data.interest !== 'No especificado' ? data.interest : prev.interest,
+          contactInfo: data.contactInfo && data.contactInfo !== 'No especificado' ? data.contactInfo : prev.contactInfo,
+        }));
         
-        if (data) {
-          setFormData(prev => ({
-            ...prev,
-            name: data.name || prev.name,
-            company: data.company || prev.company,
-            country: data.country || prev.country,
-            sector: data.sector || prev.sector,
-            position: data.position || prev.position,
-            interest: data.interest || prev.interest,
-            contactInfo: data.contactInfo || prev.contactInfo,
-          }));
-          toast.success("Información extraída del PDF", { id: toastId });
+        // Extract URL from pasted text if it's there
+        if (!linkedinUrl) {
+          const urlMatch = pastedText.match(/https?:\/\/(www\.)?linkedin\.com\/in\/[^\s\"\'\<\>\,\;\(\)\#]+/i);
+          if (urlMatch) {
+            setLinkedinUrl(urlMatch[0]);
+            toast.success("¡URL de LinkedIn extraída y datos auto-completados!", { id: toastId });
+          } else {
+            toast.success("Información extraída correctamente del texto", { id: toastId });
+          }
         } else {
-          toast.error("No se pudo analizar el PDF", { id: toastId });
+          toast.success("Información extraída correctamente del texto", { id: toastId });
         }
-        setParsingPdf(false);
-      };
-      reader.onerror = () => {
-        toast.error("Error al leer el archivo", { id: toastId });
-        setParsingPdf(false);
-      };
-      reader.readAsDataURL(file);
+        
+        setPastedText(''); // Clear the textarea
+      } else {
+        toast.error("No se pudo extraer información del texto", { id: toastId });
+      }
     } catch (error) {
-      console.error("PDF Parsing error:", error);
-      toast.error("Error al procesar el PDF", { id: toastId });
-      setParsingPdf(false);
+      console.error("Text parsing error:", error);
+      toast.error("Error al procesar el texto", { id: toastId });
+    } finally {
+      setParsingText(false);
     }
   };
 
@@ -271,28 +274,32 @@ export default function LeadForm({ open, onOpenChange, isDemoMode, clientId }: L
             </div>
 
             <div className="space-y-2">
-              <Label className="flex items-center gap-2 text-primary font-bold">
+              <Label htmlFor="pastedText" className="flex items-center gap-2 text-primary font-bold">
                 <FileText size={16} />
-                Subir PDF Perfil
+                Pegar Perfil / CV (Ctrl+C / Ctrl+V)
               </Label>
-              <div className="relative">
+              <div className="flex gap-2">
                 <Input 
-                  type="file" 
-                  accept=".pdf"
-                  onChange={handlePdfUpload}
-                  disabled={parsingPdf}
-                  className="bg-muted border-border cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                  id="pastedText"
+                  value={pastedText}
+                  onChange={(e) => setPastedText(e.target.value)}
+                  placeholder="Pega el texto de LinkedIn o CV aquí..."
+                  className="bg-muted border-border"
+                  disabled={parsingText}
                 />
-                {parsingPdf && (
-                  <div className="absolute inset-y-0 right-3 flex items-center">
-                    <Loader2 className="animate-spin text-primary" size={18} />
-                  </div>
-                )}
+                <Button 
+                  type="button" 
+                  onClick={handleAnalyzeText} 
+                  disabled={parsingText || !pastedText.trim()}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 shrink-0"
+                >
+                  {parsingText ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
+                </Button>
               </div>
             </div>
           </div>
           <p className="text-[10px] text-muted-foreground italic text-center">
-            Usa la URL o sube el PDF del perfil para que la IA complete los datos automáticamente.
+            Pega el enlace de LinkedIn o copia todo el texto de su perfil / CV (Ctrl+A y Ctrl+C) y pégalo en el recuadro para que la IA complete los datos automáticamente.
           </p>
         </div>
 

@@ -11,7 +11,7 @@ const PORT = 3000;
 
 // Initialize Gemini
 const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
+  apiKey: process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY,
   httpOptions: {
     headers: {
       'User-Agent': 'aistudio-build',
@@ -31,7 +31,7 @@ app.post("/api/linkedin/scrape", async (req, res) => {
     const slug = slugMatch ? slugMatch[1] : "";
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: `Analiza exhaustivamente este perfil de LinkedIn: ${url} (Slug: ${slug})
       
       TAREA: 
@@ -73,13 +73,65 @@ app.post("/api/linkedin/scrape", async (req, res) => {
   }
 });
 
+app.post("/api/linkedin/analyze-text", async (req, res) => {
+  const { text } = req.body;
+  if (!text || !text.trim()) return res.status(400).json({ error: "Text is required" });
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: `Extrae la información profesional de este texto copiado de un currículum o perfil de LinkedIn.
+      
+      TEXTO DE PERFIL/CV:
+      """
+      ${text}
+      """
+      
+      IMPORTANTE: La empresa y el cargo deben ser los ÚLTIMOS que aparezcan en su listado de experiencia laboral (la experiencia más reciente o actual). Si el texto contiene enlaces o URLs de LinkedIn, extráelos si es posible.
+      
+      VALORES REQUERIDOS (Devuelve estrictamente JSON con este esquema):
+      {
+        "name": "Nombre completo de la persona",
+        "company": "Empresa actual (última en su experiencia)",
+        "sector": "Industria o sector",
+        "country": "Ubicación (País/Ciudad)",
+        "interest": "Breve resumen profesional o cargo",
+        "position": "Cargo actual específico (último en su experiencia)",
+        "contactInfo": "Email o teléfono si aparece"
+      }`,
+      config: {
+        systemInstruction: "Eres un experto en reclutamiento y prospección B2B. Tu objetivo es extraer datos precisos de perfiles de LinkedIn o currículums pegados como texto, priorizando siempre la experiencia más reciente.",
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            name: { type: Type.STRING },
+            company: { type: Type.STRING },
+            sector: { type: Type.STRING },
+            country: { type: Type.STRING },
+            interest: { type: Type.STRING },
+            position: { type: Type.STRING },
+            contactInfo: { type: Type.STRING }
+          },
+          required: ["name", "company"]
+        }
+      }
+    });
+
+    res.json(JSON.parse(response.text || "{}"));
+  } catch (error: any) {
+    console.error("Text Analysis Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post("/api/linkedin/analyze-pdf", async (req, res) => {
   const { base64Data } = req.body;
   if (!base64Data) return res.status(400).json({ error: "Base64 data is required" });
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: {
         parts: [
           {

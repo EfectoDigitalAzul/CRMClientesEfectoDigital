@@ -56,7 +56,7 @@ import { toast } from 'sonner';
 import { getStatusBadgeColor, getStatusLabel, formatDate, cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { scrapeLinkedInProfile, analyzeLinkedInPDF } from '../services/linkedinService';
+import { scrapeLinkedInProfile, analyzeProfessionalText } from '../services/linkedinService';
 import { Calendar } from '@/components/ui/calendar';
 
 interface LeadDetailsProps {
@@ -99,7 +99,8 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
     tag: lead.tag || ''
   });
   const [enriching, setEnriching] = useState(false);
-  const [parsingPdf, setParsingPdf] = useState(false);
+  const [pastedText, setPastedText] = useState('');
+  const [parsingText, setParsingText] = useState(false);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
 
   useEffect(() => {
@@ -161,41 +162,63 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
     }
   };
 
-  const enrichWithPdf = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (file.type !== 'application/pdf') {
-      toast.error("Por favor sube un archivo PDF");
+  const enrichWithText = async (textToParse: string) => {
+    if (!textToParse || !textToParse.trim()) {
+      toast.error("Por favor pega algo de texto primero");
       return;
     }
 
-    setParsingPdf(true);
-    const toastId = toast.loading("Analizando PDF...");
+    setParsingText(true);
+    const toastId = toast.loading("Analizando texto con IA...");
 
     try {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64 = (reader.result as string).split(',')[1];
-        const data = await analyzeLinkedInPDF(base64);
-        
-        if (data) {
-          await applyEnrichedData(data);
-          toast.success("Perfil enriquecido desde PDF", { id: toastId });
-        } else {
-          toast.error("No se pudo analizar el PDF", { id: toastId });
+      const data = await analyzeProfessionalText(textToParse);
+      
+      if (data) {
+        const updates: any = {};
+        if (!lead.linkedinUrl) {
+          const urlMatch = textToParse.match(/https?:\/\/(www\.)?linkedin\.com\/in\/[^\s\"\'\<\>\,\;\(\)\#]+/i);
+          if (urlMatch) {
+            updates.linkedinUrl = urlMatch[0];
+          }
         }
-        setParsingPdf(false);
-      };
-      reader.onerror = () => {
-        toast.error("Error al leer el archivo", { id: toastId });
-        setParsingPdf(false);
-      };
-      reader.readAsDataURL(file);
+        
+        // Merge AI-parsed data
+        if (data.name && data.name !== 'No especificado' && data.name !== 'Nombre') updates.name = data.name;
+        if (data.company && data.company !== 'No especificado' && data.company !== 'Empresa') updates.company = data.company;
+        if (data.position && data.position !== 'No especificado' && data.position !== 'Cargo') updates.position = data.position;
+        if (data.country && data.country !== 'No especificado' && data.country !== 'País') updates.country = data.country;
+        if (data.sector && data.sector !== 'No especificado' && data.sector !== 'Industria') updates.sector = data.sector;
+        if (data.interest && data.interest !== 'No especificado') updates.interest = data.interest;
+        if (data.contactInfo && data.contactInfo !== 'No especificado') updates.contactInfo = data.contactInfo;
+
+        if (isEditing) {
+          setEditData(prev => ({ ...prev, ...updates }));
+        }
+
+        if (Object.keys(updates).length > 0) {
+          if (isDemoMode) {
+            updateLeadInDemo(updates);
+          } else {
+            const { doc, updateDoc } = await import('firebase/firestore');
+            await updateDoc(doc(db, 'leads', lead.id), {
+              ...updates,
+              updatedAt: new Date().toISOString()
+            });
+          }
+          toast.success("Perfil enriquecido con el texto de la IA", { id: toastId });
+          setPastedText('');
+        } else {
+          toast.info("No se encontraron nuevos datos que agregar", { id: toastId });
+        }
+      } else {
+        toast.error("No se pudo extraer información del texto", { id: toastId });
+      }
     } catch (error) {
-      console.error("PDF Parsing error:", error);
-      toast.error("Error al procesar el PDF", { id: toastId });
-      setParsingPdf(false);
+      console.error("Text parsing error:", error);
+      toast.error("Error al procesar el texto", { id: toastId });
+    } finally {
+      setParsingText(false);
     }
   };
 
@@ -836,27 +859,27 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
                     )}
                     
                     {profile?.role !== 'client' && (
-                      <div className="flex items-center justify-between gap-4 p-2 rounded-lg border border-border/50 bg-muted/50">
+                      <div className="flex flex-col gap-2 p-3 rounded-lg border border-border/50 bg-muted/50">
                         <div className="flex items-center gap-2">
                           <FileText size={14} className="text-muted-foreground" />
-                          <span className="text-xs font-medium text-foreground">Enriquecer con PDF</span>
+                          <span className="text-xs font-medium text-foreground">Enriquecer con Texto (Ctrl+C / Ctrl+V)</span>
                         </div>
-                        <div className="relative">
+                        <div className="flex gap-2">
                           <Input 
-                            type="file" 
-                            accept=".pdf"
-                            onChange={enrichWithPdf}
-                            disabled={parsingPdf}
-                            className="hidden"
-                            id="pdf-enricher"
+                            id="pastedTextDetails"
+                            value={pastedText}
+                            onChange={(e) => setPastedText(e.target.value)}
+                            placeholder="Pega el perfil o CV completo aquí..."
+                            className="bg-muted border-border text-xs h-7 py-1 px-2 flex-grow"
+                            disabled={parsingText}
                           />
-                          <Label 
-                            htmlFor="pdf-enricher"
-                            className="h-7 px-3 flex items-center justify-center text-[10px] font-bold bg-primary text-primary-foreground rounded-md hover:bg-primary/90 cursor-pointer"
+                          <Button 
+                            onClick={() => enrichWithText(pastedText)}
+                            disabled={parsingText || !pastedText.trim()}
+                            className="h-7 px-3 flex items-center justify-center text-[10px] font-bold bg-primary text-primary-foreground rounded-md hover:bg-primary/90 shrink-0"
                           >
-                            {parsingPdf ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} className="mr-1" />}
-                            Subir PDF
-                          </Label>
+                            {parsingText ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                          </Button>
                         </div>
                       </div>
                     )}

@@ -66,12 +66,12 @@ export async function scrapeLinkedInProfile(url: string, retryCount = 0): Promis
   }
 }
 
-export async function analyzeLinkedInPDF(base64Data: string): Promise<any> {
+export async function analyzeProfessionalText(text: string): Promise<any> {
   try {
-    const response = await fetch("/api/linkedin/analyze-pdf", {
+    const response = await fetch("/api/linkedin/analyze-text", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ base64Data }),
+      body: JSON.stringify({ text }),
     });
 
     if (!response.ok) {
@@ -81,7 +81,8 @@ export async function analyzeLinkedInPDF(base64Data: string): Promise<any> {
 
     return await response.json();
   } catch (error) {
-    console.error("Error analyzing PDF:", error);
+    console.error("Error analyzing professional text:", error);
     return null;
   }
 }
+

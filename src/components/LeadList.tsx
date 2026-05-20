@@ -280,9 +280,9 @@ export default function LeadList({ profile, isDemoMode, clientId, targetId, onTa
   const filteredLeads = leads.filter(lead => {
     const matchesClient = lead.clientId === clientId;
     const matchesSearch = 
-      lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      lead.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      lead.contactInfo.toLowerCase().includes(searchTerm.toLowerCase());
+      (lead.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (lead.company || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (lead.contactInfo || '').toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = statusFilter === 'all' || lead.status === statusFilter;
     const matchesStage = stageFilter === 'all' || lead.stage === stageFilter;
@@ -746,12 +746,12 @@ export default function LeadList({ profile, isDemoMode, clientId, targetId, onTa
             <Card className="border border-border rounded-xl shadow-none overflow-hidden bg-card relative">
               <div 
                 ref={scrollContainerRef}
-                className="max-h-[60vh] md:max-h-[calc(100vh-320px)] overflow-y-auto overflow-x-auto custom-scrollbar overscroll-contain"
+                className="max-h-[50vh] md:max-h-[calc(100vh-380px)] overflow-auto custom-scrollbar overscroll-contain"
               >
-                <Table>
-                  <TableHeader className="sticky top-0 z-20 bg-muted/90 backdrop-blur shadow-sm">
+                <Table className="relative border-separate border-spacing-0">
+                  <TableHeader className="sticky top-0 z-40 bg-muted/95 backdrop-blur-md shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)]">
                     <TableRow className="hover:bg-transparent border-b border-border">
-                      <TableHead className="w-[50px] py-4 px-6 text-center sticky top-0 bg-transparent z-20">
+                      <TableHead className="w-[50px] py-4 px-6 text-center sticky left-0 top-0 bg-muted/95 backdrop-blur-md z-50 border-r border-border/50">
                         <input 
                           type="checkbox" 
                           className="h-4 w-4 rounded border-border bg-muted text-primary focus:ring-primary"
@@ -759,15 +759,15 @@ export default function LeadList({ profile, isDemoMode, clientId, targetId, onTa
                           onChange={toggleSelectAll}
                         />
                       </TableHead>
-                      <TableHead className="font-bold text-muted-foreground py-4 px-6 sticky top-0 bg-transparent z-20">Nombre / Empresa</TableHead>
-                      <TableHead className="font-bold text-muted-foreground py-4 px-6 sticky top-0 bg-transparent z-20">Tag / Perfil</TableHead>
-                      <TableHead className="font-bold text-muted-foreground py-4 px-6 sticky top-0 bg-transparent z-20">Etapa</TableHead>
-                      <TableHead className="font-bold text-muted-foreground py-4 px-6 sticky top-0 bg-transparent z-20">Contacto</TableHead>
-                      <TableHead className="font-bold text-muted-foreground py-4 px-6 sticky top-0 bg-transparent z-20">País / Sector</TableHead>
-                      <TableHead className="font-bold text-muted-foreground py-4 px-6 sticky top-0 bg-transparent z-20 w-[150px]">Seguimiento</TableHead>
-                      <TableHead className="font-bold text-muted-foreground py-4 px-6 sticky top-0 bg-transparent z-20 text-center">Estado</TableHead>
-                      <TableHead className="font-bold text-muted-foreground py-4 px-6 sticky top-0 bg-transparent z-20">Última Acción</TableHead>
-                      <TableHead className="w-[80px] py-4 px-6 sticky top-0 bg-transparent z-20"></TableHead>
+                      <TableHead className="font-bold text-muted-foreground py-4 px-6 sticky left-[50px] top-0 bg-muted/95 backdrop-blur-md z-50 border-r border-border/50 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]">Nombre / Empresa</TableHead>
+                      <TableHead className="font-bold text-muted-foreground py-4 px-6 sticky top-0 bg-transparent z-30">Tag / Perfil</TableHead>
+                      <TableHead className="font-bold text-muted-foreground py-4 px-6 sticky top-0 bg-transparent z-30">Etapa</TableHead>
+                      <TableHead className="font-bold text-muted-foreground py-4 px-6 sticky top-0 bg-transparent z-30">Contacto</TableHead>
+                      <TableHead className="font-bold text-muted-foreground py-4 px-6 sticky top-0 bg-transparent z-30">País / Sector</TableHead>
+                      <TableHead className="font-bold text-muted-foreground py-4 px-6 sticky top-0 bg-transparent z-30 w-[150px]">Seguimiento</TableHead>
+                      <TableHead className="font-bold text-muted-foreground py-4 px-6 sticky top-0 bg-transparent z-30 text-center">Estado</TableHead>
+                      <TableHead className="font-bold text-muted-foreground py-4 px-6 sticky top-0 bg-transparent z-30">Última Acción</TableHead>
+                      <TableHead className="w-[80px] py-4 px-6 sticky right-0 top-0 bg-muted/95 backdrop-blur-md z-50 border-l border-border/50 shadow-[-4px_0_10px_-4px_rgba(0,0,0,0.1)]"></TableHead>
                     </TableRow>
                   </TableHeader>
                 <TableBody>
@@ -785,7 +785,7 @@ export default function LeadList({ profile, isDemoMode, clientId, targetId, onTa
                       }`}
                       onClick={() => handleViewDetails(lead)}
                     >
-                      <TableCell className="py-4 px-6 text-center" onClick={(e) => e.stopPropagation()}>
+                      <TableCell className="py-4 px-6 text-center sticky left-0 z-20 bg-inherit backdrop-blur-sm border-r border-border/10" onClick={(e) => e.stopPropagation()}>
                         <input 
                           type="checkbox" 
                           className="h-4 w-4 rounded border-border bg-muted text-primary focus:ring-primary"
@@ -793,8 +793,8 @@ export default function LeadList({ profile, isDemoMode, clientId, targetId, onTa
                           onChange={() => toggleLeadSelection(lead.id)}
                         />
                       </TableCell>
-                      <TableCell className="py-4 px-6">
-                        <div className="flex flex-col">
+                      <TableCell className="py-4 px-6 sticky left-[50px] z-20 bg-inherit backdrop-blur-sm border-r border-border/10 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.05)]">
+                        <div className="flex flex-col min-w-[150px]">
                           <span className="font-bold text-foreground">{lead.name}</span>
                           <span className="flex items-center gap-1 text-[11px] text-muted-foreground font-medium">
                             <Building2 size={12} />
@@ -919,7 +919,7 @@ export default function LeadList({ profile, isDemoMode, clientId, targetId, onTa
                           <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">{formatDate(lead.updatedAt)}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="py-4 px-6">
+                      <TableCell className="py-4 px-6 sticky right-0 z-20 bg-inherit backdrop-blur-sm border-l border-border/10 shadow-[-4px_0_10px_-4px_rgba(0,0,0,0.05)]">
                         <DropdownMenu>
                           <DropdownMenuTrigger 
                             onClick={(e) => e.stopPropagation()}

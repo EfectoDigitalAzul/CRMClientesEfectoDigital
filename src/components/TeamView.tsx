@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, onSnapshot, query, where, addDoc, deleteDoc, doc, updateDoc, orderBy } from 'firebase/firestore';
-import { UserProfile, Client, ClientHistoryNote, Attachment } from '../types';
+import { UserProfile, Client, ClientHistoryNote, Attachment, ClientStatus } from '../types';
 import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { 
   getStatusBadgeColor, 
   getStatusLabel, 
+  getClientStatusBadgeColor,
+  getClientStatusLabel,
   formatDate,
   cn 
 } from '../lib/utils';
@@ -42,7 +44,8 @@ import {
   Paperclip,
   File as FileIcon,
   X as XIcon,
-  ExternalLink
+  ExternalLink,
+  BarChart3
 } from 'lucide-react';
 import { 
   Dialog, 
@@ -163,6 +166,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
   const [selectedSetterForNewClient, setSelectedSetterForNewClient] = useState<string>('');
   const [newClientStartDate, setNewClientStartDate] = useState('');
   const [newClientEndDate, setNewClientEndDate] = useState('');
+  const [newClientStatus, setNewClientStatus] = useState<ClientStatus>('onboarding');
   const [creating, setCreating] = useState(false);
   const [deleteConfirmClient, setDeleteConfirmClient] = useState<{ id: string; name: string } | null>(null);
   const [confirmStep, setConfirmStep] = useState(1);
@@ -327,6 +331,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
         content: newHistoryNote,
         authorId: profile.uid,
         authorName: profile.displayName,
+        type: 'note',
         date: new Date().toISOString(),
         createdAt: new Date().toISOString(),
         attachments: attachments
@@ -392,6 +397,28 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
     onTabChange('dashboard');
   };
 
+  const handleUpdateClientStatus = async (clientId: string, newStatus: ClientStatus) => {
+    try {
+      if (isDemoMode) {
+        const stored = localStorage.getItem('demo-clients');
+        const demoClients = stored ? JSON.parse(stored) : MOCK_CLIENTS;
+        const updatedList = demoClients.map((c: any) => c.id === clientId ? { ...c, status: newStatus } : c);
+        localStorage.setItem('demo-clients', JSON.stringify(updatedList));
+        setClients(updatedList);
+        window.dispatchEvent(new CustomEvent('demo-clients-updated'));
+      } else {
+        await updateDoc(doc(db, 'clients', clientId), { status: newStatus });
+      }
+      toast.success(`Estado de cliente actualizado a ${getClientStatusLabel(newStatus)}`);
+    } catch (err) {
+      if (!isDemoMode) {
+        handleFirestoreError(err, OperationType.UPDATE, `clients/${clientId}`);
+      }
+      console.error("Error updating client status:", err);
+      toast.error("Error al actualizar estado");
+    }
+  };
+
   const handleCreateClient = async () => {
     if (!newClientName.trim() || !selectedAMForNewClient) return;
     setCreating(true);
@@ -399,6 +426,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
       const tags = newClientTags.split(',').map(t => t.trim()).filter(t => t !== '');
       const newClient = {
         name: newClientName,
+        status: newClientStatus,
         accountManagerId: selectedAMForNewClient,
         setterId: selectedSetterForNewClient || undefined,
         availableTags: tags.length > 0 ? tags : undefined,
@@ -424,6 +452,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
       setNewClientStartDate('');
       setNewClientEndDate('');
       setNewClientTags('');
+      setNewClientStatus('onboarding');
     } catch (error) {
       toast.error("Error al sumar cliente");
     } finally {
@@ -640,7 +669,24 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
                                 <Briefcase size={16} />
                               </div>
                               <div className="flex flex-col">
-                                <span className="font-bold text-sm text-foreground">{client.name}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-sm text-foreground">{client.name}</span>
+                                  <Select 
+                                    value={client.status || 'onboarding'} 
+                                    onValueChange={(v) => handleUpdateClientStatus(client.id, v as ClientStatus)}
+                                  >
+                                    <SelectTrigger className={cn("h-5 min-w-[90px] px-2 text-[9px] font-black uppercase tracking-widest border-none shadow-none focus:ring-0", getClientStatusBadgeColor(client.status || 'onboarding'))}>
+                                      <SelectValue placeholder="Estado" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-popover border-border min-w-[120px]">
+                                      {(['onboarding', 'active', 'paused', 'completed', 'cancelled'] as ClientStatus[]).map(s => (
+                                        <SelectItem key={s} value={s} className="text-[10px] font-bold uppercase tracking-wider">
+                                          {getClientStatusLabel(s)}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
                                 <div className="flex items-center gap-3 mt-0.5">
                                   <div className="flex gap-2">
                                     {isAM && <span className="text-[9px] bg-secondary text-primary border border-primary/30 px-1.5 py-0.5 rounded font-bold uppercase tracking-tight">AM</span>}
@@ -730,6 +776,19 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
                                 <Calendar size={14} className="text-muted-foreground/60" />
                                 Agenda
                               </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                title="Informes de Rendimiento"
+                                className="h-8 gap-2 text-[10px] font-black uppercase text-muted-foreground hover:text-primary hover:bg-secondary/50 border border-transparent hover:border-primary/20"
+                                onClick={() => {
+                                  onClientSelect(client.id);
+                                  onTabChange('reports');
+                                }}
+                              >
+                                <BarChart3 size={14} className="text-muted-foreground/60" />
+                                Informes
+                              </Button>
                               
                               {(profile?.role === 'director' || profile?.role === 'commercial' || (profile?.role === 'account_manager' && client.accountManagerId === profile.uid)) && (
                                 <>
@@ -789,6 +848,21 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
                 placeholder="Ej: Inmobiliaria XYZ"
                 className="bg-muted border-border"
               />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-foreground font-medium">Estado Inicial</Label>
+              <Select value={newClientStatus} onValueChange={(v) => setNewClientStatus(v as ClientStatus)}>
+                <SelectTrigger className="h-9 bg-muted border-border text-xs font-bold uppercase tracking-widest">
+                  <SelectValue placeholder="Seleccionar Estado" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover border-border">
+                  {(['onboarding', 'active', 'paused', 'completed', 'cancelled'] as ClientStatus[]).map(s => (
+                    <SelectItem key={s} value={s} className="text-xs font-bold uppercase tracking-wider">
+                      {getClientStatusLabel(s)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="clientTags" className="text-foreground font-medium">Tags Predeterminados (Separados por coma)</Label>
@@ -906,7 +980,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
           <div className="space-y-6 py-4 max-h-[75vh] overflow-y-auto pr-2 px-1">
             {/* Sección 1: Identificación y Plan */}
             <div className="grid grid-cols-2 gap-4 border-b border-border pb-6">
-              <div className="space-y-2 col-span-2">
+              <div className="space-y-2">
                 <Label htmlFor="editClientName" className="text-[10px] uppercase font-bold text-muted-foreground">Nombre del Cliente / Empresa</Label>
                 <Input 
                   id="editClientName" 
@@ -914,6 +988,22 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
                   onChange={(e) => setEditingClient(editingClient ? { ...editingClient, name: e.target.value } : null)} 
                   className="bg-muted border-border font-bold"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Estado Actual</Label>
+                <Select value={editingClient?.status || 'onboarding'} onValueChange={(v) => setEditingClient(editingClient ? { ...editingClient, status: v as ClientStatus } : null)}>
+                  <SelectTrigger className={cn("h-9 border-none font-black uppercase tracking-widest", getClientStatusBadgeColor(editingClient?.status || 'onboarding'))}>
+                    <SelectValue placeholder="Estado" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover border-border">
+                    {(['onboarding', 'active', 'paused', 'completed', 'cancelled'] as ClientStatus[]).map(s => (
+                      <SelectItem key={s} value={s} className="text-xs font-bold uppercase tracking-wider">
+                        {getClientStatusLabel(s)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">

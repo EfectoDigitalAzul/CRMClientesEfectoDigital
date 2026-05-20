@@ -44,9 +44,12 @@ export interface Meeting {
 
 export type LeadStage = 'setter' | 'commercial';
 
+export type ClientStatus = 'onboarding' | 'active' | 'paused' | 'completed' | 'cancelled';
+
 export interface Client {
   id: string;
   name: string;
+  status?: ClientStatus;
   description?: string;
   accountManagerId?: string; // The AM responsible for this client
   setterId?: string; // The Setter assigned to this client
@@ -66,6 +69,14 @@ export interface Client {
   progress?: number; // 0-100
   weeklyNotes?: { [key: string]: string }; // Note per day of week
   notes?: string; // Persistent global notes
+  planDuration?: string; // e.g., "3 meses"
+  renewalDate?: string; // ISO string
+  nextSteps?: string;
+  feedback?: string;
+  renewalCount?: number;
+  budget?: number;
+  adspend?: number;
+  targetLeads?: number;
 }
 
 export interface Attachment {
@@ -74,6 +85,8 @@ export interface Attachment {
   type: string;
 }
 
+export type HistoryNoteType = 'note' | 'milestone' | 'blocker' | 'advance';
+
 export interface ClientHistoryNote {
   id: string;
   clientId: string;
@@ -81,6 +94,8 @@ export interface ClientHistoryNote {
   authorId: string;
   authorName: string;
   content: string;
+  type: HistoryNoteType;
+  isResolved?: boolean; // For blockers
   createdAt: string;
   attachments?: Attachment[];
 }

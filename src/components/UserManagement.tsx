@@ -310,7 +310,8 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
               Personal de Equipo
             </h3>
             <div className="rounded-xl border border-border bg-card shadow-none overflow-hidden">
-              <Table>
+              <div className="overflow-x-auto overflow-y-hidden shadow-[inset_0_0_20px_rgba(0,0,0,0.02)]">
+                <Table>
                 <TableHeader className="bg-muted/50 border-b border-border">
                   <TableRow className="hover:bg-transparent border-b-border/50">
                     <TableHead className="text-muted-foreground font-bold uppercase text-[10px] tracking-wider">Usuario</TableHead>
@@ -409,6 +410,7 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </div>
           </div>
         )}
@@ -420,7 +422,8 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
             Accesos a Clientes
           </h3>
           <div className="rounded-xl border border-border bg-card shadow-none overflow-hidden">
-            <Table>
+            <div className="overflow-x-auto overflow-y-hidden">
+              <Table>
               <TableHeader className="bg-muted/50 border-b border-border">
                 <TableRow className="hover:bg-transparent border-b-border/50">
                   <TableHead className="text-muted-foreground font-bold uppercase text-[10px] tracking-wider">Cliente/Empresa</TableHead>
@@ -527,6 +530,7 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
               </TableBody>
             </Table>
           </div>
+        </div>
         </div>
       </div>
 

@@ -47,10 +47,12 @@ import LeadForm from './components/LeadForm';
 import UserManagement from './components/UserManagement';
 import ClientSelector from './components/ClientSelector';
 import TeamView from './components/TeamView';
+import TeamPerformance from './components/TeamPerformance';
 import MeetingAgenda from './components/MeetingAgenda';
 import FollowUpCenter from './components/FollowUpCenter';
 import LeadDetails from './components/LeadDetails';
-import { Briefcase, Target, User as UserIcon, Lock, ShieldCheck, Mail } from 'lucide-react';
+import ClientReportsDashboard from './components/ClientReportsDashboard';
+import { Briefcase, Target, User as UserIcon, Lock, ShieldCheck, Mail, History as HistoryIcon, Activity, BarChart3, ChartPie } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -781,7 +783,16 @@ export default function App() {
                 <div className="pt-4 border-t border-white/5 text-center">
                   <button 
                     type="button"
-                    onClick={loginWithGoogle}
+                    onClick={async () => {
+                      try {
+                        await loginWithGoogle();
+                      } catch (error: any) {
+                        if (error.code !== 'auth/popup-closed-by-user') {
+                          console.error("Google Login Error:", error);
+                          toast.error("Error al iniciar sesión con Google");
+                        }
+                      }
+                    }}
                     className="text-[10px] items-center gap-2 font-bold uppercase tracking-widest text-muted-foreground/60 hover:text-white transition-colors inline-flex"
                   >
                     <svg className="w-3 h-3" viewBox="0 0 24 24">
@@ -885,6 +896,19 @@ export default function App() {
 
               {(profile?.role === 'director' || profile?.role === 'account_manager') && (
                 <SidebarItem 
+                  icon={<BarChart3 size={18} />} 
+                  label="Rendimiento Equipo" 
+                  active={activeTab === 'performance'} 
+                  onClick={() => {
+                    setActiveTab('performance');
+                    setSelectedClientId('');
+                    setIsMobileMenuOpen(false);
+                  }} 
+                />
+              )}
+
+              {(profile?.role === 'director' || profile?.role === 'account_manager') && (
+                <SidebarItem 
                   icon={<Settings size={18} />} 
                   label="Gestión de Accesos" 
                   active={activeTab === 'settings'} 
@@ -983,12 +1007,26 @@ export default function App() {
           )}
 
           {(profile?.role === 'director' || profile?.role === 'account_manager') && (
-            <SidebarItem 
-              icon={<Settings size={18} />} 
-              label="Gestión de Accesos" 
-              active={activeTab === 'settings'} 
-              onClick={() => setActiveTab('settings')} 
-            />
+            <>
+              <SidebarItem 
+                icon={<BarChart3 size={18} />} 
+                label="Rendimiento Equipo" 
+                active={activeTab === 'performance'} 
+                onClick={() => {
+                  setActiveTab('performance');
+                  setSelectedClientId('');
+                }} 
+              />
+              <SidebarItem 
+                icon={<Settings size={18} />} 
+                label="Gestión de Accesos" 
+                active={activeTab === 'settings'} 
+                onClick={() => {
+                  setActiveTab('settings');
+                  setSelectedClientId('');
+                }} 
+              />
+            </>
           )}
         </nav>
 
@@ -1137,6 +1175,17 @@ export default function App() {
               onTabChange={setActiveTab}
               isDemoMode={isDemoMode}
               profile={profile}
+            />
+          )}
+          {activeTab === 'performance' && (profile?.role === 'director' || profile?.role === 'account_manager') && (
+            <TeamPerformance 
+              isDemoMode={isDemoMode}
+              profile={profile}
+              onClientSelect={(clientId) => {
+                setSelectedClientId(clientId);
+                setActiveTab('dashboard');
+              }}
+              onTabChange={setActiveTab}
             />
           )}
         </div>

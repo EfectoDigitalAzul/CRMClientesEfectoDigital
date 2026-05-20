@@ -1,9 +1,31 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
-import { LeadStatus } from "../types"
+import { LeadStatus, ClientStatus } from "../types"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
+}
+
+export function getClientStatusBadgeColor(status?: ClientStatus) {
+  switch (status) {
+    case 'onboarding': return 'bg-blue-500/10 text-blue-500 border border-blue-500/20';
+    case 'active': return 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20';
+    case 'paused': return 'bg-amber-500/10 text-amber-500 border border-amber-500/20';
+    case 'completed': return 'bg-slate-500/10 text-slate-500 border border-slate-500/20';
+    case 'cancelled': return 'bg-red-500/10 text-red-500 border border-red-500/20';
+    default: return 'bg-muted text-muted-foreground border border-border';
+  }
+}
+
+export function getClientStatusLabel(status?: ClientStatus) {
+  switch (status) {
+    case 'onboarding': return 'En Marcha';
+    case 'active': return 'Activo';
+    case 'paused': return 'Pausado';
+    case 'completed': return 'Finalizado';
+    case 'cancelled': return 'Cancelado';
+    default: return 'Sin Estado';
+  }
 }
 
 export function getStatusBadgeColor(status: LeadStatus) {

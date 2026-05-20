@@ -37,7 +37,7 @@ import {
   Building2, 
   Calendar as CalendarIcon, 
   MessageSquare, 
-  History,
+  History as HistoryIcon,
   CheckCircle2,
   Clock,
   User,

@@ -51,6 +51,7 @@ import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO, subMonths
 import { es } from 'date-fns/locale';
 import { formatDate, cn } from '../lib/utils';
 import { DashboardAIInsights } from './DashboardAIInsights';
+import { CampaignHistory } from './CampaignHistory';
 import { 
   Target,
   DollarSign,
@@ -154,16 +155,26 @@ export default function DashboardStats({ profile, isDemoMode, clientId }: Dashbo
     // Load widget order from localStorage
     const savedOrder = localStorage.getItem(`dashboard-order-${clientId}`);
     if (savedOrder) {
-      setWidgetOrder(JSON.parse(savedOrder));
+      const parsedOrder = JSON.parse(savedOrder);
+      // Ensure the NEW campaign history widget is included for users with an existing saved order
+      if (!parsedOrder.includes('widget-campaign-history')) {
+        // Insert it after widget-ai or at index 5
+        const aiIndex = parsedOrder.indexOf('widget-ai');
+        const insertAt = aiIndex !== -1 ? aiIndex + 1 : 5;
+        parsedOrder.splice(insertAt, 0, 'widget-campaign-history');
+        localStorage.setItem(`dashboard-order-${clientId}`, JSON.stringify(parsedOrder));
+      }
+      setWidgetOrder(parsedOrder);
     } else {
-      setWidgetOrder([
-        'stat-new', 'stat-followups', 'stat-actual-revenue', 'stat-revenue',
-        'widget-ai', 'chart-historical-leads', 'chart-historical-meetings',
-        'table-monthly-evolution',
-        'chart-funnel', 'chart-histogram',
-        'chart-sectors', 'list-followups-simple', 'list-agenda', 'chart-stages', 'chart-status', 'table-tags',
-        'list-activity'
-      ]);
+        setWidgetOrder([
+          'stat-new', 'stat-followups', 'stat-actual-revenue', 'stat-revenue',
+          'widget-ai', 'widget-campaign-history', 'chart-historical-leads', 
+          'chart-historical-meetings',
+          'table-monthly-evolution',
+          'chart-funnel', 'chart-histogram',
+          'chart-sectors', 'list-followups-simple', 'list-agenda', 'chart-stages', 'chart-status', 'table-tags',
+          'list-activity'
+        ]);
     }
 
     if (isDemoMode) {
@@ -645,6 +656,8 @@ export default function DashboardStats({ profile, isDemoMode, clientId }: Dashbo
             valueColor="text-emerald-600"
           />
         );
+      case 'widget-campaign-history':
+        return <CampaignHistory clientId={clientId} profile={profile} isDemoMode={isDemoMode} />;
       case 'widget-ai':
         return <DashboardAIInsights leads={currentLeads} meetings={currentMeetings} />;
       case 'chart-funnel':
@@ -1378,7 +1391,7 @@ export default function DashboardStats({ profile, isDemoMode, clientId }: Dashbo
             {widgetOrder.slice(4).map((id) => (
               // Filter out the historical charts since they are now in a dedicated section
               (id !== 'chart-historical-leads' && id !== 'chart-historical-meetings') && (
-                <SortableWidget key={id} id={id} fullWidth={id === 'chart-sectors' || id === 'widget-ai' || id === 'chart-funnel' || id === 'chart-histogram'}>
+                <SortableWidget key={id} id={id} fullWidth={id === 'chart-sectors' || id === 'widget-ai' || id === 'chart-funnel' || id === 'chart-histogram' || id === 'widget-campaign-history'}>
                   {renderWidget(id)}
                 </SortableWidget>
               )

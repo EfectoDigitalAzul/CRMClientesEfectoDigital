@@ -105,36 +105,36 @@ export function parseTextHeuristically(text: string): any {
     if (!lineText) return null;
     
     const locationKeywords = [
-      { names: ['argentina'], display: 'Argentina' },
-      { names: ['españa', 'spain'], display: 'España' },
-      { names: ['méxico', 'mexico', 'cdmx'], display: 'México' },
-      { names: ['colombia'], display: 'Colombia' },
-      { names: ['chile'], display: 'Chile' },
-      { names: ['perú', 'peru'], display: 'Perú' },
-      { names: ['venezuela'], display: 'Venezuela' },
-      { names: ['uruguay'], display: 'Uruguay' },
-      { names: ['paraguay'], display: 'Paraguay' },
-      { names: ['bolivia'], display: 'Bolivia' },
-      { names: ['ecuador'], display: 'Ecuador' },
+      { names: ['argentina', 'buenos aires', 'córdoba', 'cordoba', 'rosario', 'mendoza', 'tucumán', 'tucuman', 'la plata', 'mar del plata', 'salta', 'santa fe'], display: 'Argentina' },
+      { names: ['españa', 'spain', 'madrid', 'barcelona', 'valencia', 'sevilla', 'zaragoza', 'málaga', 'malaga', 'bilbao', 'murcia', 'palma', 'las palmas', 'alicante', 'vigo', 'gijón', 'gijon'], display: 'España' },
+      { names: ['méxico', 'mexico', 'cdmx', 'guadalajara', 'monterrey', 'puebla', 'tijuana', 'querétaro', 'queretaro', 'cancún', 'cancun', 'mérida', 'merida', 'león', 'leon'], display: 'México' },
+      { names: ['colombia', 'bogotá', 'bogota', 'medellín', 'medellin', 'cali', 'barranquilla', 'cartagena', 'bucaramanga', 'pereira'], display: 'Colombia' },
+      { names: ['chile', 'santiago', 'valparaíso', 'valparaiso', 'concepción', 'concepcion', 'viña del mar', 'laserena'], display: 'Chile' },
+      { names: ['perú', 'peru', 'lima', 'arequipa', 'trujillo', 'chiclayo'], display: 'Perú' },
+      { names: ['venezuela', 'caracas', 'maracaibo', 'valencia', 'barquisimeto'], display: 'Venezuela' },
+      { names: ['uruguay', 'montevideo', 'punta del este'], display: 'Uruguay' },
+      { names: ['paraguay', 'asunción', 'asuncion', 'ciudad del este'], display: 'Paraguay' },
+      { names: ['bolivia', 'la paz', 'sucre', 'santa cruz', 'cochabamba'], display: 'Bolivia' },
+      { names: ['ecuador', 'quito', 'guayaquil', 'cuenca', 'manta'], display: 'Ecuador' },
       { names: ['panamá', 'panama'], display: 'Panamá' },
-      { names: ['costa rica'], display: 'Costa Rica' },
-      { names: ['dominicana', 'república dominicana', 'republica dominicana', 'santo domingo'], display: 'República Dominicana' },
-      { names: ['puerto rico'], display: 'Puerto Rico' },
-      { names: ['guatemala'], display: 'Guatemala' },
-      { names: ['honduras'], display: 'Honduras' },
-      { names: ['el salvador', 'salvador'], display: 'El Salvador' },
-      { names: ['nicaragua'], display: 'Nicaragua' },
-      { names: ['cuba'], display: 'Cuba' },
-      { names: ['estados unidos', 'usa', 'united states', 'ee.uu', 'eeuu', 'florida', 'miami', 'new york', 'california'], display: 'Estados Unidos' },
-      { names: ['brasil', 'brazil'], display: 'Brasil' },
-      { names: ['portugal'], display: 'Portugal' },
-      { names: ['italia', 'italy'], display: 'Italia' },
-      { names: ['francia', 'france'], display: 'Francia' },
-      { names: ['alemania', 'germany'], display: 'Alemania' },
-      { names: ['london', 'londres', 'united kingdom', 'reino unido', 'uk'], display: 'Reino Unido' },
-      { names: ['suecia', 'sweden'], display: 'Suecia' },
-      { names: ['suiza', 'switzerland'], display: 'Suiza' },
-      { names: ['canadá', 'canada'], display: 'Canadá' }
+      { names: ['costa rica', 'san josé', 'san jose', 'alajuela'], display: 'Costa Rica' },
+      { names: ['dominicana', 'república dominicana', 'republica dominicana', 'santo domingo', 'santiago de los caballeros'], display: 'República Dominicana' },
+      { names: ['puerto rico', 'san juan', 'ponce'], display: 'Puerto Rico' },
+      { names: ['guatemala', 'ciudad de guatemala'], display: 'Guatemala' },
+      { names: ['honduras', 'tegucigalpa', 'san pedro sula'], display: 'Honduras' },
+      { names: ['el salvador', 'salvador', 'san salvador'], display: 'El Salvador' },
+      { names: ['nicaragua', 'managua'], display: 'Nicaragua' },
+      { names: ['cuba', 'la habana', 'habana'], display: 'Cuba' },
+      { names: ['estados unidos', 'usa', 'united states', 'ee.uu', 'eeuu', 'florida', 'miami', 'new york', 'california', 'los angeles', 'texas', 'houston', 'chicago'], display: 'Estados Unidos' },
+      { names: ['brasil', 'brazil', 'sao paulo', 'são paulo', 'rio de janeiro', 'brasilia', 'brazilian'], display: 'Brasil' },
+      { names: ['portugal', 'lisboa', 'lisbon', 'porto'], display: 'Portugal' },
+      { names: ['italia', 'italy', 'roma', 'rome', 'milano', 'milan'], display: 'Italia' },
+      { names: ['francia', 'france', 'paris', 'parís', 'lyon', 'marseille'], display: 'Francia' },
+      { names: ['alemania', 'germany', 'berlin', 'berlín', 'munich', 'múnich', 'frankfurt', 'hamburg'], display: 'Alemania' },
+      { names: ['london', 'londres', 'united kingdom', 'reino unido', 'uk', 'scotland', 'escocia', 'manchester'], display: 'Reino Unido' },
+      { names: ['suecia', 'sweden', 'stockholm', 'estocolmo'], display: 'Suecia' },
+      { names: ['suiza', 'switzerland', 'geneva', 'ginebra', 'zurich', 'zúrich'], display: 'Suiza' },
+      { names: ['canadá', 'canada', 'toronto', 'montreal', 'vancouver'], display: 'Canadá' }
     ];
 
     const lowerLine = lineText.toLowerCase();
@@ -339,7 +339,7 @@ export function parseTextHeuristically(text: string): any {
 
   // 6. Header fallback logic if Experience section was not present or didn't yield enough data
   if (!position || !company || !country) {
-    for (let idx = 1; idx < Math.min(cleanLines.length, 6); idx++) {
+    for (let idx = 1; idx < Math.min(cleanLines.length, 12); idx++) {
       const line = cleanConnectionNoise(cleanLines[idx]);
       if (!line) continue;
 
@@ -347,7 +347,6 @@ export function parseTextHeuristically(text: string): any {
         const loc = extractCountryAndCity(line);
         if (loc) {
           country = loc;
-          continue;
         }
       }
 
@@ -356,6 +355,17 @@ export function parseTextHeuristically(text: string): any {
         if (pcResult) {
           if (!position) position = pcResult.position;
           if (!company) company = pcResult.company;
+        }
+      }
+    }
+
+    // Safety fallback for country: check ALL original raw lines in case one was filtered out as UI clutter
+    if (!country) {
+      for (const rawLine of lines) {
+        const loc = extractCountryAndCity(rawLine);
+        if (loc) {
+          country = loc;
+          break;
         }
       }
     }

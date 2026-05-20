@@ -58,9 +58,13 @@ import {
   ChevronUp,
   ChevronDown,
   Clock,
-  Sparkles
+  Sparkles,
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { analyzeProfessionalText } from '../services/linkedinService';
+import { Textarea } from './ui/textarea';
 import * as XLSX from 'xlsx';
 import { getStatusBadgeColor, getStatusLabel, formatDate, cn } from '../lib/utils';
 import LeadDetails from './LeadDetails';
@@ -153,6 +157,13 @@ export default function LeadList({ profile, isDemoMode, clientId, targetId, onTa
   const [isBulkDeleteConfirmOpen, setIsBulkDeleteConfirmOpen] = useState(false);
   const [confirmStep, setConfirmStep] = useState(1);
   const [viewMode, setViewMode] = useState<'table' | 'kanban' | 'followup'>(initialViewMode || 'table');
+
+  // Option 5: Quick Paste Zone States
+  const [showQuickPaste, setShowQuickPaste] = useState(false);
+  const [quickPasteText, setQuickPasteText] = useState('');
+  const [quickPasteLoading, setQuickPasteLoading] = useState(false);
+  const [quickParsedData, setQuickParsedData] = useState<any | null>(null);
+  const [quickDuplicateLead, setQuickDuplicateLead] = useState<Lead | null>(null);
 
   useEffect(() => {
     if (initialViewMode) {
@@ -321,6 +332,207 @@ export default function LeadList({ profile, isDemoMode, clientId, targetId, onTa
     const container = scrollContainerRef.current;
     if (container) {
       container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    }
+  };
+
+  const handleQuickPasteProcess = async () => {
+    if (!quickPasteText.trim()) {
+      toast.error("Por favor pega el texto del perfil primero");
+      return;
+    }
+    
+    setQuickPasteLoading(true);
+    const toastId = toast.loading("La IA de Efecto Digital está analizando el perfil...");
+    
+    try {
+      const data = await analyzeProfessionalText(quickPasteText);
+      if (data) {
+        setQuickParsedData(data);
+        
+        // Check duplicate
+        const cleanUrl = (url: string) => {
+          if (!url) return '';
+          return url.toLowerCase().trim()
+            .replace(/https?:\/\/(www\.)?/, '')
+            .replace(/\/$/, '')
+            .split('?')[0];
+        };
+
+        let foundLinkedinUrl = '';
+        const urlMatch = quickPasteText.match(/https?:\/\/(www\.)?linkedin\.com\/in\/[^\s\"\'\<\>\,\;\(\)\#]+/i);
+        if (urlMatch) {
+          foundLinkedinUrl = urlMatch[0];
+        }
+
+        const targetUrl = cleanUrl(foundLinkedinUrl);
+        const targetName = (data.name || '').trim().toLowerCase();
+        const targetCompany = (data.company || '').trim().toLowerCase();
+
+        const match = leads.find(l => {
+          if (l.clientId !== clientId) return false;
+          if (targetUrl && l.linkedinUrl && cleanUrl(l.linkedinUrl) === targetUrl) return true;
+          if (targetName && l.name && targetCompany && l.company && l.name.trim().toLowerCase() === targetName && l.company.trim().toLowerCase() === targetCompany) return true;
+          return false;
+        });
+
+        if (match) {
+          setQuickDuplicateLead(match);
+          toast.warning("⚠️ Lead duplicado detectado: " + match.name, { id: toastId });
+        } else {
+          setQuickDuplicateLead(null);
+          toast.success("¡Datos analizados correctamente!", { id: toastId });
+        }
+      } else {
+        toast.error("No se pudo extraer información del texto", { id: toastId });
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Error al procesar el perfil", { id: toastId });
+    } finally {
+      setQuickPasteLoading(false);
+    }
+  };
+
+  const handleQuickPasteCreate = async (forceDuplicate = false) => {
+    if (!quickParsedData) return;
+    
+    if (quickDuplicateLead && !forceDuplicate) {
+      toast.error("No se puede crear: ya existe este lead. Utiliza la opción de Fusionar.");
+      return;
+    }
+
+    setQuickPasteLoading(true);
+    try {
+      let foundLinkedinUrl = '';
+      const urlMatch = quickPasteText.match(/https?:\/\/(www\.)?linkedin\.com\/in\/[^\s\"\'\<\>\,\;\(\)\#]+/i);
+      if (urlMatch) {
+        foundLinkedinUrl = urlMatch[0];
+      }
+
+      const now = new Date();
+      const firstFollowUp = new Date(now);
+      firstFollowUp.setDate(now.getDate() + 7);
+
+      const newLead = {
+        clientId,
+        name: quickParsedData.name || 'Sin nombre',
+        company: quickParsedData.company || 'Sin empresa',
+        country: quickParsedData.country || 'No especificado',
+        interest: quickParsedData.interest || 'No especificado',
+        contactInfo: foundLinkedinUrl || quickParsedData.contactInfo || 'LinkedIn',
+        sector: quickParsedData.sector || 'No especificado',
+        position: quickParsedData.position || 'No especificado',
+        tag: quickParsedData.tag || '',
+        linkedinUrl: foundLinkedinUrl || '',
+        status: 'new' as LeadStatus,
+        stage: 'setter' as 'setter' | 'commercial',
+        assignedSetterId: profile?.uid || 'demo-user',
+        followUps: [],
+        meetings: [],
+        nextFollowUpDate: firstFollowUp.toISOString(),
+        followUpSequence: 0,
+        lastAction: 'Creado vía Carga Rápida',
+        isActive: true,
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      };
+
+      if (isDemoMode) {
+        const demoLeads = JSON.parse(localStorage.getItem('demo-leads') || '[]');
+        const leadWithId = { ...newLead, id: Math.random().toString(36).substr(2, 9) };
+        demoLeads.unshift(leadWithId);
+        localStorage.setItem('demo-leads', JSON.stringify(demoLeads));
+        window.dispatchEvent(new Event('demo-leads-updated'));
+      } else {
+        await addDoc(collection(db, 'leads'), newLead);
+      }
+
+      toast.success("Lead creado correctamente en Carga Rápida");
+      
+      // Reset Quick Paste State
+      setQuickPasteText('');
+      setQuickParsedData(null);
+      setQuickDuplicateLead(null);
+    } catch (error) {
+      console.error(error);
+      toast.error("Error al guardar el lead");
+    } finally {
+      setQuickPasteLoading(false);
+    }
+  };
+
+  const handleQuickPasteMerge = async () => {
+    if (!quickDuplicateLead || !quickParsedData) return;
+    setQuickPasteLoading(true);
+    try {
+      const updates: any = {};
+      const cleanField = (parsedVal: string, existVal: string) => {
+        if (parsedVal && parsedVal !== 'No especificado' && parsedVal !== 'Sin nombre' && parsedVal !== 'Sin empresa' && parsedVal !== existVal) {
+          return parsedVal;
+        }
+        return undefined;
+      };
+
+      const updatedName = cleanField(quickParsedData.name, quickDuplicateLead.name);
+      if (updatedName) updates.name = updatedName;
+
+      const updatedCompany = cleanField(quickParsedData.company, quickDuplicateLead.company);
+      if (updatedCompany) updates.company = updatedCompany;
+
+      const updatedCountry = cleanField(quickParsedData.country, quickDuplicateLead.country || '');
+      if (updatedCountry) updates.country = updatedCountry;
+
+      const updatedPosition = cleanField(quickParsedData.position, quickDuplicateLead.position || '');
+      if (updatedPosition) updates.position = updatedPosition;
+
+      const updatedSector = cleanField(quickParsedData.sector, quickDuplicateLead.sector || '');
+      if (updatedSector) updates.sector = updatedSector;
+
+      const updatedInterest = cleanField(quickParsedData.interest, quickDuplicateLead.interest || '');
+      if (updatedInterest) updates.interest = updatedInterest;
+
+      let foundLinkedinUrl = '';
+      const urlMatch = quickPasteText.match(/https?:\/\/(www\.)?linkedin\.com\/in\/[^\s\"\'\<\>\,\;\(\)\#]+/i);
+      if (urlMatch) {
+        foundLinkedinUrl = urlMatch[0];
+      }
+      if (foundLinkedinUrl && foundLinkedinUrl !== quickDuplicateLead.linkedinUrl) {
+        updates.linkedinUrl = foundLinkedinUrl;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        const timestamp = new Date().toISOString();
+        const mergedData = {
+          ...updates,
+          updatedAt: timestamp,
+          lastAction: `Lead fusionado vía Carga Rápida (${Object.keys(updates).join(', ')})`
+        };
+
+        if (isDemoMode) {
+          const stored = localStorage.getItem('demo-leads');
+          if (stored) {
+            const allLeads = JSON.parse(stored) as Lead[];
+            const updated = allLeads.map(l => l.id === quickDuplicateLead.id ? { ...l, ...mergedData } : l);
+            localStorage.setItem('demo-leads', JSON.stringify(updated));
+            window.dispatchEvent(new Event('demo-leads-updated'));
+          }
+        } else {
+          await updateDoc(doc(db, 'leads', quickDuplicateLead.id), mergedData);
+        }
+        toast.success("¡Lead fusionado y enriquecido con éxito!");
+      } else {
+        toast.info("No hay nuevos datos para fusionar.");
+      }
+
+      // Reset Quick Paste State
+      setQuickPasteText('');
+      setQuickParsedData(null);
+      setQuickDuplicateLead(null);
+    } catch (error) {
+      console.error(error);
+      toast.error("Error al fusionar lead");
+    } finally {
+      setQuickPasteLoading(false);
     }
   };
 
@@ -703,21 +915,200 @@ export default function LeadList({ profile, isDemoMode, clientId, targetId, onTa
             </Button>
           )}
           {profile?.role !== 'client' && (
-            <div className="relative">
-              <input
-                type="file"
-                accept=".csv, .xlsx, .xls"
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                onChange={handleFileUpload}
-              />
-              <Button variant="outline" className="gap-2 border-border bg-card shadow-none font-semibold hover:bg-muted text-foreground">
-                <Upload size={18} />
-                Cargar BBDD
+            <div className="flex gap-2">
+              <Button 
+                variant="outline"
+                onClick={() => setShowQuickPaste(!showQuickPaste)}
+                className={cn(
+                  "gap-2 border-border font-semibold shadow-none text-foreground transition-all h-10",
+                  showQuickPaste 
+                    ? "bg-amber-500/15 border-amber-500/35 text-amber-500 hover:bg-amber-500/25" 
+                    : "bg-card hover:bg-muted"
+                )}
+              >
+                <Zap size={18} className={cn(showQuickPaste && "animate-pulse fill-amber-500/10 text-amber-500")} />
+                <span>Carga Rápida</span>
               </Button>
+              <div className="relative">
+                <input
+                  type="file"
+                  accept=".csv, .xlsx, .xls"
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  onChange={handleFileUpload}
+                />
+                <Button variant="outline" className="gap-2 border-border bg-card shadow-none font-semibold hover:bg-muted text-foreground">
+                  <Upload size={18} />
+                  Cargar BBDD
+                </Button>
+              </div>
             </div>
           )}
         </div>
       </div>
+
+      {showQuickPaste && (
+        <motion.div 
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          className="border border-amber-500/20 bg-amber-500/[0.02] rounded-2xl p-5 mb-4 overflow-hidden shadow-sm"
+        >
+          <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-4">
+            <div className="flex items-center gap-2">
+              <div className="p-1 px-2.5 bg-amber-500/10 text-amber-500 font-extrabold text-xs rounded-full flex items-center gap-1">
+                <Sparkles size={12} className="text-amber-500 animate-spin-slow" />
+                <span>Beta IA</span>
+              </div>
+              <h3 className="text-sm font-black text-foreground tracking-tight">Carga Rápida de Leads (Copiar y Pegar Perfil)</h3>
+            </div>
+            <Button 
+              type="button" 
+              variant="ghost" 
+              onClick={() => {
+                setQuickPasteText('');
+                setQuickParsedData(null);
+                setQuickDuplicateLead(null);
+                setShowQuickPaste(false);
+              }}
+              className="text-muted-foreground hover:text-foreground h-7 px-2 text-xs font-bold hover:bg-white/5"
+            >
+              Cerrar panel
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 leading-relaxed">
+            {/* Left box: paste profiles */}
+            <div className="space-y-3">
+              <Label className="text-foreground text-xs font-bold">Pegar texto de perfil, chat o CV:</Label>
+              <Textarea
+                placeholder="Ctrl+A y Ctrl+C en el perfil de LinkedIn o chat de WhatsApp del prospecto, y pégalo completo aquí..."
+                value={quickPasteText}
+                onChange={(e) => setQuickPasteText(e.target.value)}
+                className="bg-card border-border text-xs min-h-[140px] focus-visible:ring-amber-500/30"
+                disabled={quickPasteLoading}
+              />
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-muted-foreground font-medium">Tip: Presiona el botón para mapear automáticamente con IA</span>
+                <Button
+                  size="sm"
+                  onClick={handleQuickPasteProcess}
+                  disabled={quickPasteLoading || !quickPasteText.trim()}
+                  className="bg-amber-500 hover:bg-amber-600 text-black font-extrabold text-xs px-4 h-8 shrink-0 flex items-center gap-1.5 shadow-lg shadow-amber-500/10"
+                >
+                  {quickPasteLoading ? (
+                    <>
+                      <Loader2 className="animate-spin" size={12} />
+                      <span>Analizando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={12} />
+                      <span>Mapear con IA</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {/* Right box: parsing stats & dynamic options */}
+            <div className="bg-card/45 border border-border rounded-xl p-4 flex flex-col justify-between">
+              {!quickParsedData ? (
+                <div className="flex flex-col items-center justify-center py-6 text-center space-y-2 h-full">
+                  <div className="p-3 bg-muted rounded-full text-muted-foreground border border-border">
+                    <Zap size={22} className="text-muted-foreground/60" />
+                  </div>
+                  <h4 className="text-xs font-bold text-foreground">Esperando Datos</h4>
+                  <p className="text-[11px] text-muted-foreground max-w-xs leading-relaxed">
+                    Pega los datos del prospecto a la izquierda y haz clic en "Mapear con IA". Extraeremos automáticamente nombre, empresa, país, cargo y contacto.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4 h-full flex flex-col justify-between">
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Datos Extraídos</h4>
+                      {quickDuplicateLead ? (
+                        <span className="p-1 px-2.5 rounded-full bg-amber-500/15 text-amber-500 font-extrabold text-[10px]">
+                          ⚠️ DUPLICADO
+                        </span>
+                      ) : (
+                        <span className="p-1 px-2.5 rounded-full bg-emerald-500/15 text-emerald-500 font-extrabold text-[10px]">
+                          ✓ NUEVO CONTACTO
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-background/40 p-2 rounded-lg border border-border">
+                        <span className="text-[10px] text-muted-foreground font-semibold">Nombre:</span>
+                        <p className="font-extrabold text-foreground truncate">{quickParsedData.name || 'No detectado'}</p>
+                      </div>
+                      <div className="bg-background/40 p-2 rounded-lg border border-border">
+                        <span className="text-[10px] text-muted-foreground font-semibold">Empresa:</span>
+                        <p className="font-extrabold text-foreground truncate">{quickParsedData.company || 'No detectado'}</p>
+                      </div>
+                      <div className="bg-background/40 p-2 rounded-lg border border-border">
+                        <span className="text-[10px] text-muted-foreground font-semibold">País:</span>
+                        <p className="font-semibold text-foreground truncate">{quickParsedData.country || 'No detectado'}</p>
+                      </div>
+                      <div className="bg-background/40 p-2 rounded-lg border border-border">
+                        <span className="text-[10px] text-muted-foreground font-semibold">Cargo:</span>
+                        <p className="font-semibold text-foreground truncate">{quickParsedData.position || 'No detectado'}</p>
+                      </div>
+                      <div className="bg-background/40 p-2 rounded-lg border border-border col-span-2">
+                        <span className="text-[10px] text-muted-foreground font-semibold">Contacto / Notas:</span>
+                        <p className="font-medium text-foreground truncate">{quickParsedData.contactInfo || 'No detectado'}</p>
+                      </div>
+                    </div>
+
+                    {quickDuplicateLead && (
+                      <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-[11px] text-amber-500 shadow-sm leading-relaxed">
+                        <p>
+                          Ya existe un lead registrado como <strong className="text-foreground">{quickDuplicateLead.name}</strong> ({quickDuplicateLead.company}). Puedes fusionar la información nueva en su ficha.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 justify-end pt-3 border-t border-border mt-3">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setQuickParsedData(null);
+                        setQuickDuplicateLead(null);
+                      }}
+                      className="h-8 text-xs font-bold px-3 text-muted-foreground hover:bg-muted"
+                    >
+                      Descartar
+                    </Button>
+
+                    {quickDuplicateLead ? (
+                      <Button
+                        size="sm"
+                        onClick={handleQuickPasteMerge}
+                        disabled={quickPasteLoading}
+                        className="h-8 text-xs font-extrabold px-3 bg-amber-500 hover:bg-amber-600 text-black shadow-lg shadow-amber-500/15"
+                      >
+                        🔄 Fusionar e Integrar Datos
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={() => handleQuickPasteCreate(false)}
+                        disabled={quickPasteLoading}
+                        className="h-8 text-xs font-extrabold px-3 bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/15"
+                      >
+                        ✓ Confirmar y Cargar Lead
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       <AnimatePresence mode="wait">
         {viewMode === 'followup' ? (

@@ -1244,6 +1244,8 @@ export default function App() {
         onOpenChange={setIsLeadFormOpen} 
         isDemoMode={isDemoMode} 
         clientId={selectedClientId}
+        leads={leads}
+        onViewLead={(lead) => handleOpenLeadDetails(lead)}
       />
       {selectedLeadForDetail && (
         <LeadDetails 

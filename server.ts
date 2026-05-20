@@ -62,7 +62,7 @@ app.post("/api/linkedin/scrape", async (req, res) => {
             position: { type: Type.STRING },
             contactInfo: { type: Type.STRING }
           },
-          required: ["name", "company"]
+          required: ["name", "company", "country", "position"]
         }
       }
     });
@@ -118,7 +118,7 @@ app.post("/api/linkedin/analyze-text", async (req, res) => {
             position: { type: Type.STRING },
             contactInfo: { type: Type.STRING }
           },
-          required: ["name", "company"]
+          required: ["name", "company", "country", "position"]
         }
       }
     });
@@ -179,7 +179,7 @@ app.post("/api/linkedin/analyze-pdf", async (req, res) => {
             position: { type: Type.STRING },
             contactInfo: { type: Type.STRING }
           },
-          required: ["name", "company"]
+          required: ["name", "company", "country", "position"]
         }
       }
     });

@@ -1148,6 +1148,16 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
                 />
                 <Label htmlFor="hasSetterEdit" className="text-xs font-bold text-foreground cursor-pointer">¿Tiene Setter asignado?</Label>
               </div>
+              <div className="flex items-center gap-2 pt-2 col-span-2">
+                <input 
+                  type="checkbox" 
+                  id="templatesEnabledEdit" 
+                  checked={editingClient?.templatesEnabled || false} 
+                  onChange={e => setEditingClient(editingClient ? {...editingClient, templatesEnabled: e.target.checked} : null)}
+                  className="h-4 w-4 rounded border-border bg-background text-primary"
+                />
+                <Label htmlFor="templatesEnabledEdit" className="text-xs font-bold text-foreground cursor-pointer">¿Habilitar plantillas de seguimiento/mensajes para este cliente?</Label>
+              </div>
             </div>
 
             {/* Sección 4: Links y Accesos */}

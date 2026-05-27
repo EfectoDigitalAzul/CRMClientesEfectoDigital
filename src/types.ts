@@ -77,6 +77,15 @@ export interface Client {
   budget?: number;
   adspend?: number;
   targetLeads?: number;
+  templatesEnabled?: boolean;
+  pitchTemplates?: PitchTemplate[];
+}
+
+export interface PitchTemplate {
+  id: string;
+  title: string;
+  content: string;
+  category: 'pitch' | 'followup' | 'objection' | 'other';
 }
 
 export interface Attachment {

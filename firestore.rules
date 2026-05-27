@@ -139,9 +139,15 @@ service cloud.firestore {
                (isEmailVerified() && userExists() && getUserData().role == 'client' && getUserData().assignedClientId == leadData.clientId);
       }
 
+      function isClientWithoutSetter(compId) {
+        return hasRole('client') &&
+               getUserData().assignedClientId == compId &&
+               (getClient(compId).setterId == null || getClient(compId).setterId == "");
+      }
+
       allow read: if isSignedIn() && canAccessLead(resource.data);
-      allow create: if isDirector() || isAM() || isSetter();
-      allow update: if isDirector() || isAM() || isSetter() || isCommercial();
+      allow create: if isDirector() || isAM() || isSetter() || (request.resource.data.clientId is string && isClientWithoutSetter(request.resource.data.clientId));
+      allow update: if isDirector() || isAM() || isSetter() || isCommercial() || isClientWithoutSetter(resource.data.clientId);
       allow delete: if isDirector() || (isAM() && getClient(resource.data.clientId).accountManagerId == request.auth.uid);
 
       match /followUps/{followUpId} {

@@ -81,6 +81,7 @@ interface LeadListProps {
   onTargetProcessed?: () => void;
   onLeadClick?: (lead: Lead) => void;
   initialViewMode?: 'table' | 'kanban' | 'followup';
+  clientHasSetter?: boolean;
 }
 
 const MOCK_LEADS: Lead[] = [
@@ -147,8 +148,10 @@ const MOCK_LEADS: Lead[] = [
   }
 ];
 
-export default function LeadList({ profile, isDemoMode, clientId, targetId, onTargetProcessed, onLeadClick, initialViewMode }: LeadListProps) {
+export default function LeadList({ profile, isDemoMode, clientId, targetId, onTargetProcessed, onLeadClick, initialViewMode, clientHasSetter }: LeadListProps) {
   const [leads, setLeads] = useState<Lead[]>([]);
+  const isClientWithoutSetter = profile?.role === 'client' && !clientHasSetter;
+  const canModifyLeads = profile?.role !== 'client' || isClientWithoutSetter;
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [stageFilter, setStageFilter] = useState<string>('all');
@@ -245,7 +248,7 @@ export default function LeadList({ profile, isDemoMode, clientId, targetId, onTa
     // Filter by stage based on role for "real" actionable data
     if (profile?.role === 'setter') return l.stage === 'setter';
     if (profile?.role === 'commercial') return l.stage === 'commercial';
-    if (profile?.role === 'client') return false;
+    if (profile?.role === 'client') return isClientWithoutSetter;
 
     return true;
   }).length;
@@ -261,7 +264,7 @@ export default function LeadList({ profile, isDemoMode, clientId, targetId, onTa
   }, [targetId, leads, onTargetProcessed, onLeadClick]);
 
   const toggleStage = async (lead: Lead) => {
-    if (profile?.role === 'client') return;
+    if (!canModifyLeads) return;
     
     const newStage = lead.stage === 'setter' ? 'commercial' : 'setter';
     try {
@@ -914,7 +917,7 @@ export default function LeadList({ profile, isDemoMode, clientId, targetId, onTa
               Exportar
             </Button>
           )}
-          {profile?.role !== 'client' && (
+          {canModifyLeads && (
             <div className="flex gap-2">
               <Button 
                 variant="outline"

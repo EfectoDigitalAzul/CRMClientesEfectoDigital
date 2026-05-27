@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { doc, updateDoc, collection, addDoc, onSnapshot, query, orderBy, getDoc } from 'firebase/firestore';
-import { Lead, UserProfile, LeadStatus, FollowUp, Meeting, Client } from '../types';
+import { Lead, UserProfile, LeadStatus, FollowUp, Meeting, Client, PitchTemplate } from '../types';
 import { 
   Select, 
   SelectContent, 
@@ -66,9 +66,12 @@ interface LeadDetailsProps {
   onOpenChange: (open: boolean) => void;
   profile: UserProfile | null;
   isDemoMode?: boolean;
+  clientHasSetter?: boolean;
 }
 
-export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoMode }: LeadDetailsProps) {
+export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoMode, clientHasSetter }: LeadDetailsProps) {
+  const isClientWithoutSetter = profile?.role === 'client' && !clientHasSetter;
+  const canModifyLead = profile?.role !== 'client' || isClientWithoutSetter;
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [newNote, setNewNote] = useState('');
@@ -103,6 +106,8 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
   const [pastedText, setPastedText] = useState('');
   const [parsingText, setParsingText] = useState(false);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [pitchTemplates, setPitchTemplates] = useState<PitchTemplate[]>([]);
+  const [templatesEnabled, setTemplatesEnabled] = useState(false);
 
   useEffect(() => {
     setEditData({
@@ -118,7 +123,7 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
   }, [lead]);
 
   useEffect(() => {
-    const fetchClientTags = async () => {
+    const fetchClientDetails = async () => {
       if (!lead.clientId) return;
       
       try {
@@ -127,8 +132,12 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
           if (stored) {
             const clients = JSON.parse(stored) as Client[];
             const client = clients.find(c => c.id === lead.clientId);
-            if (client?.availableTags) {
-              setAvailableTags(client.availableTags);
+            if (client) {
+              if (client.availableTags) {
+                setAvailableTags(client.availableTags);
+              }
+              setPitchTemplates(client.pitchTemplates || []);
+              setTemplatesEnabled(!!client.templatesEnabled);
             }
           }
         } else {
@@ -138,15 +147,17 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
             if (data.availableTags) {
               setAvailableTags(data.availableTags);
             }
+            setPitchTemplates(data.pitchTemplates || []);
+            setTemplatesEnabled(!!data.templatesEnabled);
           }
         }
       } catch (error) {
-        console.error("Error fetching client tags:", error);
+        console.error("Error fetching client details:", error);
       }
     };
 
     if (open) {
-      fetchClientTags();
+      fetchClientDetails();
     }
   }, [lead.clientId, open, isDemoMode]);
 
@@ -664,7 +675,7 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
                 {getStatusLabel(lead.status)}
               </Badge>
             </div>
-            {profile?.role !== 'client' && (
+            {canModifyLead && (
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -844,7 +855,7 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
                           <Linkedin size={14} />
                           Ver perfil de LinkedIn
                         </a>
-                        {profile?.role !== 'client' && (
+                        {canModifyLead && (
                           <Button 
                             variant="ghost" 
                             size="sm" 
@@ -859,7 +870,7 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
                       </div>
                     )}
                     
-                    {profile?.role !== 'client' && (
+                    {canModifyLead && (
                       <div className="flex flex-col gap-2 p-3 rounded-lg border border-border/50 bg-muted/50">
                         <div className="flex items-center gap-2">
                           <FileText size={14} className="text-muted-foreground" />
@@ -961,16 +972,52 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
           )}
 
           {/* Add Follow-up - Hide for clients */}
-          {profile?.role !== 'client' && (
+          {canModifyLead && (
             <section className="space-y-4 pt-4 border-t border-border/50">
-              <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Registrar Nueva Acción</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Registrar Nueva Acción</h3>
+                {templatesEnabled && pitchTemplates.length > 0 && (
+                  <span className="text-[9px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                    Plantillas Activas
+                  </span>
+                )}
+              </div>
+              
               <div className="space-y-3">
-                <Input 
-                  placeholder="Escribe aquí los detalles del seguimiento..." 
+                {templatesEnabled && pitchTemplates.length > 0 && (
+                  <div className="space-y-1 bg-muted/30 p-2.5 rounded-xl border border-border/40">
+                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">
+                      Mensajes Rápidos (Autocompleta [Nombre], [Empresa], [Sector])
+                    </span>
+                    <div className="flex flex-wrap gap-1 max-h-[110px] overflow-y-auto">
+                      {pitchTemplates.map(t => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => {
+                            let text = t.content;
+                            text = text.replace(/\[Nombre\]/gi, lead.name || '');
+                            text = text.replace(/\[Empresa\]/gi, lead.company || '');
+                            text = text.replace(/\[Sector\]/gi, lead.sector || '');
+                            setNewNote(text);
+                            toast.success(`Plantilla "${t.title}" insertada`);
+                          }}
+                          className="text-[10px] font-bold bg-background text-primary hover:bg-primary hover:text-primary-foreground border border-border/80 rounded px-2 py-1 transition-all cursor-pointer text-left truncate max-w-[150px]"
+                          title={t.content}
+                        >
+                          {t.category === 'pitch' ? '🚀 ' : t.category === 'followup' ? '🔄 ' : t.category === 'objection' ? '🛑 ' : '📝 '}
+                          {t.title}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <Textarea 
+                  placeholder="Escribe aquí los detalles del seguimiento o selecciona una plantilla rápida..." 
                   value={newNote}
                   onChange={(e) => setNewNote(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && addFollowUp()}
-                  className="bg-muted/50 border-border rounded-xl focus:ring-primary/20 transition-all font-medium text-sm"
+                  className="bg-muted/50 border-border rounded-xl focus:ring-primary/20 transition-all font-medium text-sm min-h-[90px]"
                 />
                 <Button 
                   onClick={addFollowUp} 
@@ -984,7 +1031,7 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
           )}
 
           {/* Add Meeting - Hide for clients */}
-          {profile?.role !== 'client' && (
+          {canModifyLead && (
             <section className="space-y-4 pt-4 border-t border-border/50">
               <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Acciones Rápidas</h3>
               <Button 
@@ -999,7 +1046,7 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
           )}
 
           {/* Etapa de Seguimiento - Hide for clients */}
-          {profile?.role !== 'client' && (
+          {canModifyLead && (
             <div className="space-y-6">
               {/* Weekly Follow-up Section */}
               <section className="space-y-4 pt-4 border-t border-border/50">
@@ -1089,7 +1136,7 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
         )}
 
           {/* Status Update - Restricted for clients */}
-          {profile?.role !== 'client' && (
+          {canModifyLead && (
             <section className="space-y-4 pt-4 border-t border-border/50">
               <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Actualizar Estado</h3>
               <div className="flex gap-2 flex-wrap">

@@ -52,7 +52,8 @@ import MeetingAgenda from './components/MeetingAgenda';
 import FollowUpCenter from './components/FollowUpCenter';
 import LeadDetails from './components/LeadDetails';
 import ClientReportsDashboard from './components/ClientReportsDashboard';
-import { Briefcase, Target, User as UserIcon, Lock, ShieldCheck, Mail, History as HistoryIcon, Activity, BarChart3, ChartPie } from 'lucide-react';
+import ClientTemplates from './components/ClientTemplates';
+import { Briefcase, Target, User as UserIcon, Lock, ShieldCheck, Mail, History as HistoryIcon, Activity, BarChart3, ChartPie, FileCode } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -555,6 +556,13 @@ export default function App() {
     }
   }, [profile]);
 
+  useEffect(() => {
+    const clientHasSetter = selectedClient ? (!!selectedClient.setterId && selectedClient.setterId.trim() !== '') : false;
+    if (profile?.role === 'client' && clientHasSetter && activeTab === 'leads') {
+      setActiveTab('dashboard');
+    }
+  }, [profile, selectedClient, activeTab]);
+
   const handleNotificationClick = (n: any) => {
     if (n.clientId) {
       setSelectedClientId(n.clientId);
@@ -870,6 +878,10 @@ export default function App() {
     );
   }
 
+  const clientHasSetter = selectedClient ? (!!selectedClient.setterId && selectedClient.setterId.trim() !== '') : false;
+  const showLeadsSection = profile?.role !== 'client' || !clientHasSetter;
+  const isStaff = profile?.role !== 'client' && (profile?.role === 'director' || profile?.role === 'setter' || profile?.role === 'account_manager' || profile?.role === 'commercial');
+
   return (
     <div className="flex h-screen w-screen bg-background overflow-hidden">
       {/* Mobile Sidebar Overlay */}
@@ -917,28 +929,40 @@ export default function App() {
                     active={activeTab === 'dashboard'} 
                     onClick={() => { setActiveTab('dashboard'); setIsMobileMenuOpen(false); }} 
                   />
-                  <SidebarItem 
-                    icon={<Users size={18} />} 
-                    label="Leads / Contactos" 
-                    active={activeTab === 'leads'} 
-                    onClick={() => { setActiveTab('leads'); setIsMobileMenuOpen(false); }} 
-                  />
+                  {showLeadsSection && (
+                    <SidebarItem 
+                      icon={<Users size={18} />} 
+                      label="Leads / Contactos" 
+                      active={activeTab === 'leads' && leadViewMode !== 'followup'} 
+                      onClick={() => { setActiveTab('leads'); setLeadViewMode('table'); setIsMobileMenuOpen(false); }} 
+                    />
+                  )}
                   <SidebarItem 
                     icon={<Calendar size={18} />} 
                     label="Agenda" 
                     active={activeTab === 'meetings'} 
                     onClick={() => { setActiveTab('meetings'); setIsMobileMenuOpen(false); }} 
                   />
-                  <SidebarItem 
-                    icon={<Clock size={18} />} 
-                    label="Seguimientos" 
-                    active={activeTab === 'leads' && leadViewMode === 'followup'} 
-                    onClick={() => { 
-                      setActiveTab('leads'); 
-                      setLeadViewMode('followup');
-                      setIsMobileMenuOpen(false); 
-                    }} 
-                  />
+                  {showLeadsSection && (
+                    <SidebarItem 
+                      icon={<Clock size={18} />} 
+                      label="Seguimientos" 
+                      active={activeTab === 'leads' && leadViewMode === 'followup'} 
+                      onClick={() => { 
+                        setActiveTab('leads'); 
+                        setLeadViewMode('followup');
+                        setIsMobileMenuOpen(false); 
+                      }} 
+                    />
+                  )}
+                  {selectedClient.templatesEnabled && profile?.role !== 'client' && (
+                    <SidebarItem 
+                      icon={<FileCode size={18} />} 
+                      label="Plantillas Pitching" 
+                      active={activeTab === 'templates'} 
+                      onClick={() => { setActiveTab('templates'); setIsMobileMenuOpen(false); }} 
+                    />
+                  )}
                 </div>
               )}
 
@@ -1026,30 +1050,42 @@ export default function App() {
                       active={activeTab === 'dashboard'} 
                       onClick={() => setActiveTab('dashboard')} 
                     />
-                    <SidebarItem 
-                      icon={<Users size={18} />} 
-                      label="Leads / Contactos" 
-                      active={activeTab === 'leads' && leadViewMode !== 'followup'} 
-                      onClick={() => {
-                        setActiveTab('leads');
-                        setLeadViewMode('table');
-                      }} 
-                    />
+                    {showLeadsSection && (
+                      <SidebarItem 
+                        icon={<Users size={18} />} 
+                        label="Leads / Contactos" 
+                        active={activeTab === 'leads' && leadViewMode !== 'followup'} 
+                        onClick={() => {
+                          setActiveTab('leads');
+                          setLeadViewMode('table');
+                        }} 
+                      />
+                    )}
                     <SidebarItem 
                       icon={<Calendar size={18} />} 
                       label="Agenda Reuniones" 
                       active={activeTab === 'meetings'} 
                       onClick={() => setActiveTab('meetings')} 
                     />
-                    <SidebarItem 
-                      icon={<Clock size={18} />} 
-                      label="Seguimientos" 
-                      active={activeTab === 'leads' && leadViewMode === 'followup'} 
-                      onClick={() => { 
-                        setActiveTab('leads'); 
-                        setLeadViewMode('followup');
-                      }} 
-                    />
+                    {showLeadsSection && (
+                      <SidebarItem 
+                        icon={<Clock size={18} />} 
+                        label="Seguimientos" 
+                        active={activeTab === 'leads' && leadViewMode === 'followup'} 
+                        onClick={() => { 
+                          setActiveTab('leads'); 
+                          setLeadViewMode('followup');
+                        }} 
+                      />
+                    )}
+                    {selectedClient.templatesEnabled && profile?.role !== 'client' && (
+                      <SidebarItem 
+                        icon={<FileCode size={18} />} 
+                        label="Plantillas Pitching" 
+                        active={activeTab === 'templates'} 
+                        onClick={() => setActiveTab('templates')} 
+                      />
+                    )}
                   </div>
             </div>
           )}
@@ -1185,7 +1221,7 @@ export default function App() {
               </PopoverContent>
             </Popover>
             
-            {profile?.role !== 'client' && (profile?.role === 'director' || profile?.role === 'setter' || profile?.role === 'account_manager' || profile?.role === 'commercial') && (
+            {(isStaff || (profile?.role === 'client' && !clientHasSetter)) && (
               <Button onClick={() => setIsLeadFormOpen(true)} className="gap-2 font-semibold">
                 <Plus size={18} />
                 <span>Nuevo Lead</span>
@@ -1196,6 +1232,9 @@ export default function App() {
 
         <div className="flex-1 overflow-y-auto p-8">
           {activeTab === 'dashboard' && <DashboardStats profile={profile} isDemoMode={isDemoMode} clientId={selectedClientId} />}
+          {activeTab === 'templates' && selectedClient && (
+            <ClientTemplates client={selectedClient} isDemoMode={isDemoMode} />
+          )}
           {activeTab === 'leads' && (
             <LeadList 
               profile={profile} 
@@ -1205,6 +1244,7 @@ export default function App() {
               onTargetProcessed={() => setTargetTaskId(null)}
               onLeadClick={handleOpenLeadDetails}
               initialViewMode={leadViewMode}
+              clientHasSetter={clientHasSetter}
             />
           )}
           {activeTab === 'meetings' && (
@@ -1254,6 +1294,7 @@ export default function App() {
           onOpenChange={setIsDetailsOpen} 
           profile={profile}
           isDemoMode={isDemoMode}
+          clientHasSetter={clientHasSetter}
         />
       )}
       <Toaster position="top-right" theme={theme} />

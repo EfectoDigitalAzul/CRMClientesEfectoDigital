@@ -45,7 +45,8 @@ import {
   File as FileIcon,
   X as XIcon,
   ExternalLink,
-  BarChart3
+  BarChart3,
+  RefreshCcw
 } from 'lucide-react';
 import { 
   Dialog, 
@@ -206,10 +207,18 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
         const stored = localStorage.getItem('demo-clients');
         const allClients: Client[] = stored ? JSON.parse(stored) : MOCK_CLIENTS;
         // Filter out placeholders
-        setClients(allClients.filter(c => 
+        let filtered = allClients.filter(c => 
           !c.name.toLowerCase().includes('mi primer lead') && 
           !c.name.toLowerCase().includes('lead flow')
-        ));
+        );
+        if (profile && profile.role !== 'director') {
+          if (profile.role === 'client') {
+            filtered = filtered.filter(c => c.id === profile.assignedClientId);
+          } else {
+            filtered = filtered.filter(c => c.accountManagerId === profile.uid || c.setterId === profile.uid);
+          }
+        }
+        setClients(filtered);
       };
 
       const loadTeam = () => {
@@ -265,10 +274,18 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
     const clientUnsubscribe = onSnapshot(clientQuery, (snapshot) => {
       const allClients = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client));
       // Filter out placeholders
-      setClients(allClients.filter(c => 
+      let filtered = allClients.filter(c => 
         !c.name.toLowerCase().includes('mi primer lead') && 
         !c.name.toLowerCase().includes('lead flow')
-      ));
+      );
+      if (profile && profile.role !== 'director') {
+        if (profile.role === 'client') {
+          filtered = filtered.filter(c => c.id === profile.assignedClientId);
+        } else {
+          filtered = filtered.filter(c => c.accountManagerId === profile.uid || c.setterId === profile.uid);
+        }
+      }
+      setClients(filtered);
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'clients');
@@ -541,21 +558,31 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
   const handleDeleteAction = async () => {
     if (!deleteConfirmClient) return;
     try {
+      const deletedBy = profile?.displayName || profile?.email || 'Sistema';
+      const deletedAt = new Date().toISOString();
       if (isDemoMode) {
         const stored = localStorage.getItem('demo-clients');
-        const demoClients = stored ? JSON.parse(stored) : clients;
-        const updatedClients = demoClients.filter((c: any) => c.id !== deleteConfirmClient.id);
+        const demoClients: Client[] = stored ? JSON.parse(stored) : clients;
+        const updatedClients = demoClients.map(c => 
+          c.id === deleteConfirmClient.id 
+            ? { ...c, isDeleted: true, deletedAt, deletedBy } 
+            : c
+        );
         localStorage.setItem('demo-clients', JSON.stringify(updatedClients));
-        setClients(updatedClients);
+        setClients(updatedClients.filter(c => !c.isDeleted));
         window.dispatchEvent(new CustomEvent('demo-clients-updated'));
       } else {
-        await deleteDoc(doc(db, 'clients', deleteConfirmClient.id));
+        await updateDoc(doc(db, 'clients', deleteConfirmClient.id), {
+          isDeleted: true,
+          deletedAt,
+          deletedBy
+        });
       }
-      toast.success("Cliente eliminado correctamente");
+      toast.success("Cliente enviado a la papelera");
       setDeleteConfirmClient(null);
       setConfirmStep(1);
     } catch (error) {
-      toast.error("Error al eliminar el cliente");
+      toast.error("Error al mover el cliente a la papelera");
     }
   };
 
@@ -1077,6 +1104,68 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
                   date={editingClient?.contractEndDate}
                   setDate={(d) => setEditingClient(editingClient ? {...editingClient, contractEndDate: d} : null)}
                 />
+              </div>
+            </div>
+
+            {/* Sección de Renovación */}
+            <div className="grid grid-cols-2 gap-4 border-b border-border pb-6 bg-emerald-500/5 dark:bg-emerald-950/10 p-4 rounded-xl border border-emerald-500/20">
+              <h4 className="col-span-2 text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                <RefreshCcw size={14} />
+                Renovaciones de Contrato
+              </h4>
+              <div className="space-y-2">
+                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Historial de Renovaciones</Label>
+                <div className="h-9 flex items-center bg-muted rounded-md px-3 border border-border">
+                  <span className="text-xs font-black text-foreground">
+                    Acumulado: {editingClient?.renewalCount || 0} renovaciones
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-2 flex items-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    const currentCount = editingClient?.renewalCount || 0;
+                    let nextEndDate = editingClient?.contractEndDate;
+                    if (nextEndDate) {
+                      try {
+                        const d = new Date(nextEndDate.replace(/-/g, '/'));
+                        d.setMonth(d.getMonth() + 1);
+                        nextEndDate = d.toISOString().split('T')[0];
+                      } catch (e) {
+                         console.error(e);
+                      }
+                    }
+                    setEditingClient(editingClient ? {
+                      ...editingClient,
+                      renewalCount: currentCount + 1,
+                      renewalStatus: 'will_renew',
+                      contractEndDate: nextEndDate
+                    } : null);
+                    toast.success("¡Renovación agregada! Se incrementó el contador y se extendió la fecha fin por 1 mes.");
+                  }}
+                  className="w-full text-xs h-9 font-bold bg-emerald-600 hover:bg-emerald-700 text-white dark:text-white border-none shadow-none"
+                >
+                  <Plus size={14} className="mr-1" />
+                  Sumar Renovación (+1)
+                </Button>
+              </div>
+              <div className="col-span-2 space-y-2">
+                <Label className="text-[10px] uppercase font-bold text-muted-foreground">¿Se sabe si renueva el próximo período?</Label>
+                <Select
+                  value={editingClient?.renewalStatus || "unknown"}
+                  onValueChange={(v: any) => setEditingClient(editingClient ? {...editingClient, renewalStatus: v} : null)}
+                >
+                  <SelectTrigger className="h-9 text-xs bg-background border-border">
+                    <SelectValue placeholder="Estado de renovación" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover border-border">
+                    <SelectItem value="unknown">Por decidir / En negociación</SelectItem>
+                    <SelectItem value="will_renew">Sí, renueva</SelectItem>
+                    <SelectItem value="will_not_renew">No renueva</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 

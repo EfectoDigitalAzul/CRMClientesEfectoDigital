@@ -71,6 +71,9 @@ export default function FollowUpCenter({ profile, clientId, isDemoMode, onLeadCl
       const leadsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
       setLeads(leadsData);
       setLoading(false);
+    }, (error) => {
+      console.error("Error fetching follow-up leads in FollowUpCenter:", error);
+      setLoading(false);
     });
 
     return () => unsubscribe();

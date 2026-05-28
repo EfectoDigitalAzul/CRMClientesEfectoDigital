@@ -74,11 +74,15 @@ export interface Client {
   nextSteps?: string;
   feedback?: string;
   renewalCount?: number;
+  renewalStatus?: 'unknown' | 'will_renew' | 'will_not_renew';
   budget?: number;
   adspend?: number;
   targetLeads?: number;
   templatesEnabled?: boolean;
   pitchTemplates?: PitchTemplate[];
+  isDeleted?: boolean;
+  deletedAt?: string;
+  deletedBy?: string;
 }
 
 export interface PitchTemplate {
@@ -134,6 +138,9 @@ export interface Lead {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  isDeleted?: boolean;
+  deletedAt?: string;
+  deletedBy?: string;
 }
 
 export interface Notification {

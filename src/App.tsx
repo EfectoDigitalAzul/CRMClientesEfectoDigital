@@ -53,7 +53,8 @@ import FollowUpCenter from './components/FollowUpCenter';
 import LeadDetails from './components/LeadDetails';
 import ClientReportsDashboard from './components/ClientReportsDashboard';
 import ClientTemplates from './components/ClientTemplates';
-import { Briefcase, Target, User as UserIcon, Lock, ShieldCheck, Mail, History as HistoryIcon, Activity, BarChart3, ChartPie, FileCode } from 'lucide-react';
+import TrashBin from './components/TrashBin';
+import { Briefcase, Target, User as UserIcon, Lock, ShieldCheck, Mail, History as HistoryIcon, Activity, BarChart3, ChartPie, FileCode, Trash2 } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -120,12 +121,19 @@ export default function App() {
     if (isDemoMode) {
       const updateClients = () => {
         const stored = localStorage.getItem('demo-clients');
-        const allClients: Client[] = stored ? JSON.parse(stored) : [];
-        // Filter out the "Mi Primer Lead Flow" or similar placeholders
-        setClients(allClients.filter(c => 
+        let allClients: Client[] = stored ? JSON.parse(stored) : [];
+        let filtered = allClients.filter(c => 
           !c.name.toLowerCase().includes('mi primer lead') && 
           !c.name.toLowerCase().includes('lead flow')
-        ));
+        );
+        if (profile && profile.role !== 'director') {
+          if (profile.role === 'client') {
+            filtered = filtered.filter(c => c.id === profile.assignedClientId);
+          } else {
+            filtered = filtered.filter(c => c.accountManagerId === profile.uid || c.setterId === profile.uid);
+          }
+        }
+        setClients(filtered);
       };
       updateClients();
       window.addEventListener('demo-clients-updated', updateClients);
@@ -135,17 +143,33 @@ export default function App() {
       const path = 'clients';
       const unsubscribe = onSnapshot(collection(db, path), (snapshot) => {
         const allClients = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client));
-        // Explicitly filter out the unwanted placeholder if it exists in Firestore
-        setClients(allClients.filter(c => 
+        let filtered = allClients.filter(c => 
           !c.name.toLowerCase().includes('mi primer lead') && 
           !c.name.toLowerCase().includes('lead flow')
-        ));
+        );
+        if (profile && profile.role !== 'director') {
+          if (profile.role === 'client') {
+            filtered = filtered.filter(c => c.id === profile.assignedClientId);
+          } else {
+            filtered = filtered.filter(c => c.accountManagerId === profile.uid || c.setterId === profile.uid);
+          }
+        }
+        setClients(filtered);
       }, (error) => {
         handleFirestoreError(error, OperationType.LIST, path);
       });
       return () => unsubscribe();
     }
-  }, [isDemoMode, user]);
+  }, [isDemoMode, user, profile]);
+
+  useEffect(() => {
+    if (profile && profile.role !== 'director' && clients.length > 0) {
+      const isAllowed = clients.some(c => c.id === selectedClientId);
+      if (!isAllowed) {
+        setSelectedClientId(clients[0].id);
+      }
+    }
+  }, [clients, selectedClientId, profile]);
 
   useEffect(() => {
     if (isDemoMode) {
@@ -882,6 +906,75 @@ export default function App() {
   const showLeadsSection = profile?.role !== 'client' || !clientHasSetter;
   const isStaff = profile?.role !== 'client' && (profile?.role === 'director' || profile?.role === 'setter' || profile?.role === 'account_manager' || profile?.role === 'commercial');
 
+  const getContractStatusAlert = () => {
+    if (!selectedClient || !selectedClient.contractEndDate) return null;
+    
+    try {
+      const endDate = new Date(selectedClient.contractEndDate.replace(/-/g, '/'));
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      endDate.setHours(0, 0, 0, 0);
+      
+      const diffTime = endDate.getTime() - now.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays <= 7) {
+        return {
+          diffDays,
+          isExpired: diffDays < 0,
+          formattedDate: selectedClient.contractEndDate.split('-').reverse().join('/'),
+          status: selectedClient.renewalStatus || 'unknown'
+        };
+      }
+    } catch (e) {
+      console.error("Error computing contract status", e);
+    }
+    
+    return null;
+  };
+
+  const handlePromoRenewal = async (status: 'will_renew' | 'will_not_renew') => {
+    if (!selectedClient) return;
+    
+    let nextEndDate = selectedClient.contractEndDate;
+    if (status === 'will_renew' && nextEndDate) {
+      try {
+        const d = new Date(nextEndDate.replace(/-/g, '/'));
+        d.setMonth(d.getMonth() + 1);
+        nextEndDate = d.toISOString().split('T')[0];
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    const updated: Client = {
+      ...selectedClient,
+      renewalStatus: status,
+      ...(status === 'will_renew' ? {
+        renewalCount: (selectedClient.renewalCount || 0) + 1,
+        contractEndDate: nextEndDate
+      } : {})
+    };
+
+    try {
+      if (isDemoMode) {
+        const stored = localStorage.getItem('demo-clients');
+        if (stored) {
+          const all: Client[] = JSON.parse(stored);
+          const newList = all.map(c => c.id === selectedClient.id ? updated : c);
+          localStorage.setItem('demo-clients', JSON.stringify(newList));
+          window.dispatchEvent(new CustomEvent('demo-clients-updated'));
+        }
+      } else {
+        await updateDoc(doc(db, 'clients', selectedClient.id), updated as any);
+      }
+      setSelectedClient(updated);
+      toast.success(status === 'will_renew' ? "¡Renovación completada y fecha de contrato extendida por 1 mes!" : "Estado de renovación actualizado.");
+    } catch (error) {
+      toast.error("Error al registrar la renovación.");
+    }
+  };
+
   return (
     <div className="flex h-screen w-screen bg-background overflow-hidden">
       {/* Mobile Sidebar Overlay */}
@@ -985,6 +1078,15 @@ export default function App() {
                   label="Gestión de Accesos" 
                   active={activeTab === 'settings'} 
                   onClick={() => { setActiveTab('settings'); setIsMobileMenuOpen(false); }} 
+                />
+              )}
+
+              {profile?.role === 'director' && (
+                <SidebarItem 
+                  icon={<Trash2 size={18} />} 
+                  label="Papelera" 
+                  active={activeTab === 'trash'} 
+                  onClick={() => { setActiveTab('trash'); setIsMobileMenuOpen(false); }} 
                 />
               )}
             </nav>
@@ -1110,6 +1212,17 @@ export default function App() {
                   setSelectedClientId('');
                 }} 
               />
+              {profile?.role === 'director' && (
+                <SidebarItem 
+                  icon={<Trash2 size={18} />} 
+                  label="Papelera" 
+                  active={activeTab === 'trash'} 
+                  onClick={() => {
+                    setActiveTab('trash');
+                    setSelectedClientId('');
+                  }} 
+                />
+              )}
             </>
           )}
         </nav>
@@ -1231,6 +1344,65 @@ export default function App() {
         </header>
 
         <div className="flex-1 overflow-y-auto p-8">
+          {/* BANNER DE VENCIMIENTO DE CONTRATO (De 1 semana o menos) */}
+          {(() => {
+            const alert = getContractStatusAlert();
+            if (!alert) return null;
+            
+            return (
+              <div className={`mb-6 p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition-all animate-fade-in ${
+                alert.isExpired 
+                  ? 'bg-rose-500/10 border-rose-500/20 text-rose-950 dark:text-rose-200' 
+                  : 'bg-amber-500/10 border-amber-500/20 text-amber-950 dark:text-amber-200'
+              }`}>
+                <div className="flex items-start gap-3">
+                  <div className={`p-2 rounded-lg mt-0.5 ${alert.isExpired ? 'bg-rose-500/20' : 'bg-amber-500/20'}`}>
+                    <AlertCircle size={18} className={alert.isExpired ? 'text-rose-500' : 'text-amber-500'} />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm tracking-tight text-foreground">
+                      {alert.isExpired 
+                        ? `El período del contrato con ${selectedClient?.name} venció el ${alert.formattedDate}`
+                        : `El contrato con ${selectedClient?.name} termina pronto: el ${alert.formattedDate}`}
+                    </h4>
+                    <p className="text-xs opacity-80 mt-1 text-muted-foreground">
+                      {alert.isExpired 
+                        ? `Expiró hace ${Math.abs(alert.diffDays)} ${Math.abs(alert.diffDays) === 1 ? 'día' : 'días'}.`
+                        : `Falta ${alert.diffDays} ${alert.diffDays === 1 ? 'día' : 'días'} para finalizar.`}
+                      {" "}¿Está confirmada la renovación? 
+                      <span className="ml-1 font-extrabold">
+                        {alert.status === 'will_renew' && '✅ Sí, renovado'}
+                        {alert.status === 'will_not_renew' && '❌ No renovará'}
+                        {alert.status === 'unknown' && '⏳ En negociación'}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 self-end sm:self-center">
+                  {alert.status !== 'will_renew' && (
+                    <Button
+                      size="sm"
+                      onClick={() => handlePromoRenewal('will_renew')}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 shadow-none"
+                    >
+                      Sí, renovar (+1 Mes)
+                    </Button>
+                  )}
+                  {alert.status !== 'will_not_renew' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handlePromoRenewal('will_not_renew')}
+                      className="border-rose-500/30 hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold text-xs h-8 bg-transparent"
+                    >
+                      No renueva
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           {activeTab === 'dashboard' && <DashboardStats profile={profile} isDemoMode={isDemoMode} clientId={selectedClientId} />}
           {activeTab === 'templates' && selectedClient && (
             <ClientTemplates client={selectedClient} isDemoMode={isDemoMode} />
@@ -1275,6 +1447,9 @@ export default function App() {
               }}
               onTabChange={setActiveTab}
             />
+          )}
+          {activeTab === 'trash' && profile?.role === 'director' && (
+            <TrashBin isDemoMode={isDemoMode} currentProfile={profile} />
           )}
         </div>
       </main>

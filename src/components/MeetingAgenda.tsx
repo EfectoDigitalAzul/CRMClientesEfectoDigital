@@ -119,12 +119,18 @@ export default function MeetingAgenda({ clientId, isDemoMode, profile, targetId,
 
     const q = query(
       collection(db, 'meetings'), 
-      where('clientId', '==', clientId),
-      orderBy('date', 'asc')
+      where('clientId', '==', clientId)
     );
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setMeetings(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Meeting)));
+      const meetingsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Meeting));
+      // Sort client-side by date asc to avoid index requirements
+      const sortedMeetings = meetingsData.sort((a, b) => {
+        const dateA = a.date ? new Date(a.date).getTime() : 0;
+        const dateB = b.date ? new Date(b.date).getTime() : 0;
+        return dateA - dateB;
+      });
+      setMeetings(sortedMeetings);
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'meetings');
@@ -190,7 +196,7 @@ export default function MeetingAgenda({ clientId, isDemoMode, profile, targetId,
             l.id === lead.id ? { 
               ...l, 
               status: 'meeting-scheduled', 
-              lastAction: `Reunión agendada: ${format(meetingDate, 'dd/MM/yyyy')} ${meetingTime}`,
+              lastAction: `Reunión agendada: ${format(dateForMeeting, 'dd/MM/yyyy')} ${meetingTime}`,
               updatedAt: new Date().toISOString() 
             } : l
           );
@@ -201,7 +207,7 @@ export default function MeetingAgenda({ clientId, isDemoMode, profile, targetId,
         await addDoc(collection(db, 'meetings'), newMeeting);
         await updateDoc(doc(db, 'leads', lead.id), {
           status: 'meeting-scheduled',
-          lastAction: `Reunión agendada: ${format(meetingDate, 'dd/MM/yyyy')} ${meetingTime}`,
+          lastAction: `Reunión agendada: ${format(dateForMeeting, 'dd/MM/yyyy')} ${meetingTime}`,
           updatedAt: new Date().toISOString()
         });
       }

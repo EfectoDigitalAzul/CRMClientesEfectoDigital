@@ -216,16 +216,22 @@ export default function LeadList({ profile, isDemoMode, clientId, targetId, onTa
     }
     const q = query(
       collection(db, 'leads'), 
-      where('clientId', '==', clientId),
-      orderBy('updatedAt', 'desc')
+      where('clientId', '==', clientId)
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const leadsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
-      // Filter out placeholder leads
-      setLeads(leadsData.filter(l => 
-        !l.name.toLowerCase().includes('mi primer lead') && 
-        !l.name.toLowerCase().includes('lead follow')
-      ));
+      // Filter out placeholder leads and sort on the client-side
+      const processedLeads = leadsData
+        .filter(l => 
+          !l.name.toLowerCase().includes('mi primer lead') && 
+          !l.name.toLowerCase().includes('lead follow')
+        )
+        .sort((a, b) => {
+          const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+          const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+          return dateB - dateA;
+        });
+      setLeads(processedLeads);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'leads');
     });
@@ -561,48 +567,70 @@ export default function LeadList({ profile, isDemoMode, clientId, targetId, onTa
   const handleDeleteAction = async () => {
     if (!deleteConfirmInfo) return;
     try {
+      const deletedBy = profile?.displayName || profile?.email || 'Sistema';
+      const deletedAt = new Date().toISOString();
       if (isDemoMode) {
         const stored = localStorage.getItem('demo-leads');
         if (stored) {
           const allLeads: Lead[] = JSON.parse(stored);
-          const updatedLeads = allLeads.filter(l => l.id !== deleteConfirmInfo.id);
+          const updatedLeads = allLeads.map(l => 
+            l.id === deleteConfirmInfo.id 
+              ? { ...l, isDeleted: true, deletedAt, deletedBy } 
+              : l
+          );
           localStorage.setItem('demo-leads', JSON.stringify(updatedLeads));
-          setLeads(updatedLeads);
+          setLeads(updatedLeads.filter(l => !l.isDeleted));
           window.dispatchEvent(new CustomEvent('demo-leads-updated'));
         }
       } else {
-        await deleteDoc(doc(db, 'leads', deleteConfirmInfo.id));
+        await updateDoc(doc(db, 'leads', deleteConfirmInfo.id), {
+          isDeleted: true,
+          deletedAt,
+          deletedBy
+        });
       }
-      toast.success("Lead eliminado correctamente");
+      toast.success("Lead enviado a la papelera");
       setDeleteConfirmInfo(null);
     } catch (error) {
-      toast.error("Error al eliminar el lead");
+      toast.error("Error al mover el lead a la papelera");
     }
   };
 
   const handleBulkDeleteAction = async () => {
     if (selectedLeadIds.length === 0) return;
     try {
+      const deletedBy = profile?.displayName || profile?.email || 'Sistema';
+      const deletedAt = new Date().toISOString();
       if (isDemoMode) {
         const stored = localStorage.getItem('demo-leads');
         if (stored) {
           const allLeads: Lead[] = JSON.parse(stored);
-          const updatedLeads = allLeads.filter(l => !selectedLeadIds.includes(l.id));
+          const updatedLeads = allLeads.map(l => 
+            selectedLeadIds.includes(l.id) 
+              ? { ...l, isDeleted: true, deletedAt, deletedBy } 
+              : l
+          );
           localStorage.setItem('demo-leads', JSON.stringify(updatedLeads));
-          setLeads(updatedLeads);
+          setLeads(updatedLeads.filter(l => !l.isDeleted));
           window.dispatchEvent(new CustomEvent('demo-leads-updated'));
         }
       } else {
-        const promises = selectedLeadIds.map(id => deleteDoc(doc(db, 'leads', id)));
+        const promises = selectedLeadIds.map(id => 
+          updateDoc(doc(db, 'leads', id), {
+            isDeleted: true,
+            deletedAt,
+            deletedBy
+          })
+        );
         await Promise.all(promises);
       }
-      toast.success(`${selectedLeadIds.length} leads eliminados correctamente`);
+      toast.success(`${selectedLeadIds.length} leads enviados a la papelera`);
       setSelectedLeadIds([]);
       setIsBulkDeleteConfirmOpen(false);
       setConfirmStep(1);
     } catch (error) {
       console.error(error);
-      toast.error("Error al eliminar los leads");
+      toast.error("Error al mover los leads a la papelera");
     }
   };
 

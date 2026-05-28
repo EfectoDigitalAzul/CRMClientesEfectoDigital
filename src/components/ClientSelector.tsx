@@ -80,17 +80,13 @@ export default function ClientSelector({ selectedClientId, onClientChange, isDem
         !c.name.toLowerCase().includes('lead flow')
       );
 
-      // Filter based on role - All team members with @efectodigital should ideally see all clients unless restricted
-      const isStaff = profile?.email?.endsWith('@efectodigital.com.ar') || 
-                      profile?.email?.endsWith('@efectodigital.com') ||
-                      profile?.role === 'director' || 
-                      profile?.role === 'account_manager' || 
-                      profile?.role === 'setter';
-      
-      if (profile?.role === 'client' && profile.assignedClientId) {
-        clientsData = clientsData.filter(c => c.id === profile.assignedClientId);
-      } else if (!isStaff && profile?.role === 'account_manager') {
-        clientsData = clientsData.filter(c => c.accountManagerId === profile.uid);
+      // Filter based on role - All team members only see assigned clients unless Director
+      if (profile && profile.role !== 'director') {
+        if (profile.role === 'client') {
+          clientsData = clientsData.filter(c => c.id === profile.assignedClientId);
+        } else {
+          clientsData = clientsData.filter(c => c.accountManagerId === profile.uid || c.setterId === profile.uid);
+        }
       }
 
       setClients(clientsData);

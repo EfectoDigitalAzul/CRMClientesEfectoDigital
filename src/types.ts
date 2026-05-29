@@ -53,6 +53,7 @@ export interface Client {
   description?: string;
   accountManagerId?: string; // The AM responsible for this client
   setterId?: string; // The Setter assigned to this client
+  sharedAccountManagerIds?: string[]; // Additional AMs who can view/manage this client
   availableTags?: string[]; // Pre-defined tags for leads of this client
   createdAt: string;
   // New fields for complete client profile

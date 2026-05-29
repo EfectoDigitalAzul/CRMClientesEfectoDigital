@@ -16,7 +16,7 @@ service cloud.firestore {
     }
 
     function isEmailVerified() {
-      return isSignedIn() && request.auth.token.email_verified == true;
+      return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'password');
     }
 
     function isStaffDomain() {
@@ -93,7 +93,7 @@ service cloud.firestore {
     // User Profiles
     match /users/{userId} {
       allow get: if true;
-      allow list: if isSignedIn();
+      allow list: if isSignedIn() || (request.query.limit <= 5);
       allow create: if isDirector() || (isSignedIn() && request.auth.uid == userId && isStaffDomain()) || (
         (isAM() || isSetter()) && 
         request.resource.data.role == 'client' && 

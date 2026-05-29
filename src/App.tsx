@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db, loginWithGoogle, logout, isFirebaseConfigured, handleFirestoreError, OperationType } from './lib/firebase';
 import { onAuthStateChanged, User, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc, setDoc, onSnapshot, collection, query, where, orderBy, getDocs, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot, collection, query, where, orderBy, getDocs, updateDoc, deleteDoc, limit } from 'firebase/firestore';
 import { UserProfile, Lead, UserRole, Client, Meeting } from './types';
 import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
@@ -48,6 +48,7 @@ import UserManagement from './components/UserManagement';
 import ClientSelector from './components/ClientSelector';
 import TeamView from './components/TeamView';
 import TeamPerformance from './components/TeamPerformance';
+import { ROLE_PERMISSIONS } from './lib/permissions';
 import MeetingAgenda from './components/MeetingAgenda';
 import FollowUpCenter from './components/FollowUpCenter';
 import LeadDetails from './components/LeadDetails';
@@ -126,11 +127,15 @@ export default function App() {
           !c.name.toLowerCase().includes('mi primer lead') && 
           !c.name.toLowerCase().includes('lead flow')
         );
-        if (profile && profile.role !== 'director') {
+        if (profile && !ROLE_PERMISSIONS[profile.role]?.canViewClients) {
           if (profile.role === 'client') {
             filtered = filtered.filter(c => c.id === profile.assignedClientId);
           } else {
-            filtered = filtered.filter(c => c.accountManagerId === profile.uid || c.setterId === profile.uid);
+            filtered = filtered.filter(c => 
+              c.accountManagerId === profile.uid || 
+              c.setterId === profile.uid || 
+              (c.sharedAccountManagerIds && c.sharedAccountManagerIds.includes(profile.uid))
+            );
           }
         }
         setClients(filtered);
@@ -147,11 +152,15 @@ export default function App() {
           !c.name.toLowerCase().includes('mi primer lead') && 
           !c.name.toLowerCase().includes('lead flow')
         );
-        if (profile && profile.role !== 'director') {
+        if (profile && !ROLE_PERMISSIONS[profile.role]?.canViewClients) {
           if (profile.role === 'client') {
             filtered = filtered.filter(c => c.id === profile.assignedClientId);
           } else {
-            filtered = filtered.filter(c => c.accountManagerId === profile.uid || c.setterId === profile.uid);
+            filtered = filtered.filter(c => 
+              c.accountManagerId === profile.uid || 
+              c.setterId === profile.uid || 
+              (c.sharedAccountManagerIds && c.sharedAccountManagerIds.includes(profile.uid))
+            );
           }
         }
         setClients(filtered);
@@ -163,10 +172,16 @@ export default function App() {
   }, [isDemoMode, user, profile]);
 
   useEffect(() => {
-    if (profile && profile.role !== 'director' && clients.length > 0) {
-      const isAllowed = clients.some(c => c.id === selectedClientId);
-      if (!isAllowed) {
-        setSelectedClientId(clients[0].id);
+    if (profile && clients.length > 0) {
+      if (!ROLE_PERMISSIONS[profile.role]?.canViewClients) {
+        const isAllowed = clients.some(c => c.id === selectedClientId);
+        if (!isAllowed) {
+          setSelectedClientId(clients[0].id);
+        }
+      } else {
+        if (!selectedClientId) {
+          setSelectedClientId(clients[0].id);
+        }
       }
     }
   }, [clients, selectedClientId, profile]);
@@ -694,16 +709,22 @@ export default function App() {
           foundProfile = demoUsers.find(u => (u.username?.toLowerCase() === lowerUsername || u.email?.toLowerCase() === lowerUsername) && u.password === credentials.password) || null;
         }
       } else {
-        // High-reliability search in Firestore
+        // High-reliability search in Firestore with restricted query to avoid listing full collection (unauthenticated)
         try {
           const usersRef = collection(db, 'users');
-          const querySnap = await getDocs(usersRef);
-          const allUsers = querySnap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile));
-          
-          foundProfile = allUsers.find(u => 
-            (u.username?.toLowerCase() === lowerUsername || u.email?.toLowerCase() === lowerUsername) && 
-            u.password === credentials.password
-          ) || null;
+          let q;
+          if (lowerUsername.includes('@')) {
+            q = query(usersRef, where('email', '==', lowerUsername), limit(1));
+          } else {
+            q = query(usersRef, where('username', '==', lowerUsername), limit(1));
+          }
+          const querySnap = await getDocs(q);
+          if (!querySnap.empty) {
+            const docData = querySnap.docs[0].data() as any;
+            if (docData && docData.password === credentials.password) {
+              foundProfile = { uid: querySnap.docs[0].id, ...docData } as UserProfile;
+            }
+          }
         } catch (err) {
           console.error("Auth search error:", err);
           // Fallback to specific doc reads if search fails
@@ -754,7 +775,7 @@ export default function App() {
       } else if (!isDemoMode && isFirebaseConfigured) {
         // If not found in demo, try a query by username in Firebase
         const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('username', '==', lowerUsername), where('password', '==', credentials.password));
+        const q = query(usersRef, where('username', '==', lowerUsername), where('password', '==', credentials.password), limit(1));
         const querySnap = await getDocs(q);
         if (!querySnap.empty) {
           const data = { uid: querySnap.docs[0].id, ...querySnap.docs[0].data() } as UserProfile;
@@ -800,7 +821,8 @@ export default function App() {
     }
   };
 
-  if (!user && !profile && !isDemoMode) {
+  const shouldShowLogin = !isDemoMode && isFirebaseConfigured ? (!user || !profile) : (!isDemoMode && !profile);
+  if (shouldShowLogin) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-[#0a0a0a] p-6 overflow-y-auto relative font-sans dark">
         {/* Subtle Background Accent */}
@@ -1059,7 +1081,7 @@ export default function App() {
                 </div>
               )}
 
-              {(profile?.role === 'director' || profile?.role === 'account_manager') && (
+              {profile?.role === 'director' && (
                 <SidebarItem 
                   icon={<BarChart3 size={18} />} 
                   label="Rendimiento Equipo" 
@@ -1192,17 +1214,20 @@ export default function App() {
             </div>
           )}
 
+          {profile?.role === 'director' && (
+            <SidebarItem 
+              icon={<BarChart3 size={18} />} 
+              label="Rendimiento Equipo" 
+              active={activeTab === 'performance'} 
+              onClick={() => {
+                setActiveTab('performance');
+                setSelectedClientId('');
+              }} 
+            />
+          )}
+
           {(profile?.role === 'director' || profile?.role === 'account_manager') && (
             <>
-              <SidebarItem 
-                icon={<BarChart3 size={18} />} 
-                label="Rendimiento Equipo" 
-                active={activeTab === 'performance'} 
-                onClick={() => {
-                  setActiveTab('performance');
-                  setSelectedClientId('');
-                }} 
-              />
               <SidebarItem 
                 icon={<Settings size={18} />} 
                 label="Gestión de Accesos" 
@@ -1270,6 +1295,22 @@ export default function App() {
                 className="w-full bg-muted border border-border rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-foreground"
               />
             </div>
+
+            {isStaff && (
+              <div className="hidden md:block ml-2">
+                <ClientSelector 
+                  selectedClientId={selectedClientId} 
+                  onClientChange={(id) => {
+                    setSelectedClientId(id);
+                    if (activeTab === 'team' || activeTab === 'performance' || activeTab === 'settings' || activeTab === 'trash') {
+                      setActiveTab('dashboard');
+                    }
+                  }} 
+                  isDemoMode={isDemoMode}
+                  profile={profile}
+                />
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-4">
             <Button
@@ -1437,7 +1478,7 @@ export default function App() {
               profile={profile}
             />
           )}
-          {activeTab === 'performance' && (profile?.role === 'director' || profile?.role === 'account_manager') && (
+          {activeTab === 'performance' && profile?.role === 'director' && (
             <TeamPerformance 
               isDemoMode={isDemoMode}
               profile={profile}

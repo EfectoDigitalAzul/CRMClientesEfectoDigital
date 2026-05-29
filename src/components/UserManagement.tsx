@@ -216,7 +216,7 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
       const userToCreate: any = {
         uid: finalUid,
         username: lowerUsername,
-        password: newUser.password,
+        password: targetPassword,
         email: targetEmail,
         displayName: newUser.displayName,
         role: newUser.role,

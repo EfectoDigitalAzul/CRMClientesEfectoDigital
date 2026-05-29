@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, onSnapshot, query, where, addDoc, deleteDoc, doc, updateDoc, orderBy } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType, createFirebaseAuthUser, isFirebaseConfigured } from '../lib/firebase';
+import { collection, onSnapshot, query, where, addDoc, deleteDoc, doc, updateDoc, orderBy, setDoc } from 'firebase/firestore';
 import { UserProfile, Client, ClientHistoryNote, Attachment, ClientStatus } from '../types';
+import { ROLE_PERMISSIONS } from '../lib/permissions';
 import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -46,7 +47,11 @@ import {
   X as XIcon,
   ExternalLink,
   BarChart3,
-  RefreshCcw
+  RefreshCcw,
+  Copy,
+  Key,
+  ShieldAlert,
+  Edit
 } from 'lucide-react';
 import { 
   Dialog, 
@@ -165,6 +170,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
   const [newMemberEmail, setNewMemberEmail] = useState('');
   const [selectedAMForNewClient, setSelectedAMForNewClient] = useState<string>('');
   const [selectedSetterForNewClient, setSelectedSetterForNewClient] = useState<string>('');
+  const [selectedSharedAMsForNewClient, setSelectedSharedAMsForNewClient] = useState<string[]>([]);
   const [newClientStartDate, setNewClientStartDate] = useState('');
   const [newClientEndDate, setNewClientEndDate] = useState('');
   const [newClientStatus, setNewClientStatus] = useState<ClientStatus>('onboarding');
@@ -177,6 +183,14 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [selectedAttachments, setSelectedAttachments] = useState<File[]>([]);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // States for client portal access management
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [isCreatingClientAccess, setIsCreatingClientAccess] = useState(false);
+  const [isEditingClientAccess, setIsEditingClientAccess] = useState(false);
+  const [clientUsername, setClientUsername] = useState('');
+  const [clientPassword, setClientPassword] = useState('');
+  const [clientEmail, setClientEmail] = useState('');
 
   // Memoized debounced update function
   const debouncedUpdateNote = React.useCallback(
@@ -211,7 +225,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
           !c.name.toLowerCase().includes('mi primer lead') && 
           !c.name.toLowerCase().includes('lead flow')
         );
-        if (profile && profile.role !== 'director') {
+        if (profile && !ROLE_PERMISSIONS[profile.role]?.canViewClients) {
           if (profile.role === 'client') {
             filtered = filtered.filter(c => c.id === profile.assignedClientId);
           } else {
@@ -224,8 +238,9 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
       const loadTeam = () => {
         const stored = localStorage.getItem('demo-users');
         if (stored) {
-          const allUsers = JSON.parse(stored) as UserProfile[];
-          const team = allUsers.filter(u => u.role === 'account_manager' || u.role === 'setter' || u.role === 'director');
+          const parsedUsers = JSON.parse(stored) as UserProfile[];
+          setAllUsers(parsedUsers);
+          const team = parsedUsers.filter(u => u.role === 'account_manager' || u.role === 'setter' || u.role === 'director' || u.role === 'commercial');
           const sorted = [...team].sort((a, b) => {
             if (a.uid === profile?.uid) return -1;
             if (b.uid === profile?.uid) return 1;
@@ -237,6 +252,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
           }
         } else {
           setTeamMembers(MOCK_AMS);
+          setAllUsers(MOCK_AMS);
           localStorage.setItem('demo-users', JSON.stringify(MOCK_AMS));
         }
       };
@@ -253,10 +269,13 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
       };
     }
 
-    const teamQuery = query(collection(db, 'users'), where('role', 'in', ['account_manager', 'setter', 'director', 'commercial']));
+    const teamQuery = query(collection(db, 'users'));
     const teamUnsubscribe = onSnapshot(teamQuery, (snapshot) => {
       const users = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
-      const sortedUsers = [...users].sort((a, b) => {
+      setAllUsers(users);
+      
+      const staff = users.filter(u => ['account_manager', 'setter', 'director', 'commercial'].includes(u.role));
+      const sortedUsers = [...staff].sort((a, b) => {
         if (a.uid === profile?.uid) return -1;
         if (b.uid === profile?.uid) return 1;
         return 0;
@@ -278,12 +297,8 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
         !c.name.toLowerCase().includes('mi primer lead') && 
         !c.name.toLowerCase().includes('lead flow')
       );
-      if (profile && profile.role !== 'director') {
-        if (profile.role === 'client') {
-          filtered = filtered.filter(c => c.id === profile.assignedClientId);
-        } else {
-          filtered = filtered.filter(c => c.accountManagerId === profile.uid || c.setterId === profile.uid);
-        }
+      if (profile && profile.role === 'client') {
+        filtered = filtered.filter(c => c.id === profile.assignedClientId);
       }
       setClients(filtered);
       setLoading(false);
@@ -446,6 +461,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
         status: newClientStatus,
         accountManagerId: selectedAMForNewClient,
         setterId: selectedSetterForNewClient || undefined,
+        sharedAccountManagerIds: selectedSharedAMsForNewClient.length > 0 ? selectedSharedAMsForNewClient : undefined,
         availableTags: tags.length > 0 ? tags : undefined,
         contractStartDate: newClientStartDate || undefined,
         contractEndDate: newClientEndDate || undefined,
@@ -470,6 +486,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
       setNewClientEndDate('');
       setNewClientTags('');
       setNewClientStatus('onboarding');
+      setSelectedSharedAMsForNewClient([]);
     } catch (error) {
       toast.error("Error al sumar cliente");
     } finally {
@@ -488,6 +505,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
         availableTags: tags.length > 0 ? tags : undefined,
         accountManagerId: selectedAMForNewClient,
         setterId: selectedSetterForNewClient || undefined,
+        sharedAccountManagerIds: selectedSharedAMsForNewClient.length > 0 ? selectedSharedAMsForNewClient : undefined,
         progress: progress,
       };
 
@@ -506,6 +524,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
       toast.success("Cliente actualizado correctamente");
       setEditingClient(null);
       setNewClientTags('');
+      setSelectedSharedAMsForNewClient([]);
     } catch (error) {
       toast.error("Error al actualizar cliente");
     } finally {
@@ -518,6 +537,179 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
     setNewClientTags(client.availableTags?.join(', ') || '');
     setSelectedAMForNewClient(client.accountManagerId || '');
     setSelectedSetterForNewClient(client.setterId || '');
+    setSelectedSharedAMsForNewClient(client.sharedAccountManagerIds || []);
+    setIsCreatingClientAccess(false);
+    setIsEditingClientAccess(false);
+  };
+
+  const handlePrepareCreateClientUser = () => {
+    if (!editingClient) return;
+    const suggestedUsername = editingClient.name
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]/g, "");
+    
+    setClientUsername(suggestedUsername);
+    setClientPassword(`Efecto${Math.floor(1000 + Math.random() * 9000)}!`);
+    setClientEmail('');
+    setIsCreatingClientAccess(true);
+    setIsEditingClientAccess(false);
+  };
+
+  const handleSaveNewClientUser = async () => {
+    if (!editingClient) return;
+    const lowerUsername = clientUsername.trim().toLowerCase();
+    const lowerEmail = clientEmail.trim().toLowerCase();
+    
+    if (!lowerUsername) {
+      toast.error("El usuario es obligatorio");
+      return;
+    }
+    if (!clientPassword) {
+      toast.error("La contraseña es obligatoria");
+      return;
+    }
+
+    setCreating(true);
+    try {
+      const targetEmail = lowerEmail || `${lowerUsername}@cliente.efectodigital.com.ar`;
+      let finalUid = `u-${lowerUsername}`;
+
+      if (!isDemoMode && isFirebaseConfigured) {
+        try {
+          const authUid = await createFirebaseAuthUser(targetEmail, clientPassword);
+          finalUid = authUid;
+        } catch (authError: any) {
+          if (authError.code === 'auth/email-already-in-use' || authError.message?.includes('EMAIL_EXISTS')) {
+            console.warn("Correo ya registrado en Firebase Auth.");
+          } else {
+            throw new Error(`Firebase Auth: ${authError.message || authError}`);
+          }
+        }
+      }
+
+      const userToCreate: UserProfile = {
+        uid: finalUid,
+        username: lowerUsername,
+        password: clientPassword,
+        email: targetEmail,
+        displayName: editingClient.name,
+        role: 'client',
+        assignedClientId: editingClient.id,
+        isActive: true,
+        createdAt: new Date().toISOString()
+      };
+
+      if (isDemoMode) {
+        const stored = localStorage.getItem('demo-users');
+        const demoUsers = stored ? JSON.parse(stored) : [];
+        demoUsers.push(userToCreate);
+        localStorage.setItem('demo-users', JSON.stringify(demoUsers));
+        setAllUsers(demoUsers);
+        window.dispatchEvent(new CustomEvent('demo-users-updated'));
+      } else {
+        await setDoc(doc(db, 'users', finalUid), userToCreate as any);
+      }
+
+      toast.success("¡Acceso al portal creado correctamente!");
+      setIsCreatingClientAccess(false);
+    } catch (e: any) {
+      console.error(e);
+      toast.error(`Error al crear el acceso: ${e.message || e}`);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleEditClientUser = (user: UserProfile) => {
+    setClientUsername(user.username || '');
+    setClientPassword(user.password || '');
+    setClientEmail(user.email || '');
+    setIsEditingClientAccess(true);
+    setIsCreatingClientAccess(false);
+  };
+
+  const handleSaveEditedClientUser = async () => {
+    if (!editingClient) return;
+    const originalUser = allUsers.find(u => u.role === 'client' && u.assignedClientId === editingClient.id);
+    if (!originalUser) return;
+
+    const lowerUsername = clientUsername.trim().toLowerCase();
+    const lowerEmail = clientEmail.trim().toLowerCase();
+
+    if (!lowerUsername) {
+      toast.error("El usuario es obligatorio");
+      return;
+    }
+
+    setCreating(true);
+    try {
+      const targetEmail = lowerEmail || `${lowerUsername}@cliente.efectodigital.com.ar`;
+      const updatedUser = {
+        ...originalUser,
+        username: lowerUsername,
+        password: clientPassword,
+        email: targetEmail,
+      };
+
+      if (isDemoMode) {
+        const stored = localStorage.getItem('demo-users');
+        if (stored) {
+          const demoUsers = JSON.parse(stored) as UserProfile[];
+          const updated = demoUsers.map(u => u.uid === originalUser.uid ? updatedUser : u);
+          localStorage.setItem('demo-users', JSON.stringify(updated));
+          setAllUsers(updated);
+          window.dispatchEvent(new CustomEvent('demo-users-updated'));
+        }
+      } else {
+        await updateDoc(doc(db, 'users', originalUser.uid), {
+          username: lowerUsername,
+          password: clientPassword,
+          email: targetEmail,
+        });
+      }
+
+      toast.success("Accesos de cliente actualizados");
+      setIsEditingClientAccess(false);
+    } catch (e: any) {
+      console.error(e);
+      toast.error(`Error al guardar cambios: ${e.message || e}`);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleToggleClientUserStatus = async (user: UserProfile) => {
+    try {
+      const newStatus = !user.isActive;
+      if (isDemoMode) {
+        const stored = localStorage.getItem('demo-users');
+        if (stored) {
+          const demoUsers = JSON.parse(stored) as UserProfile[];
+          const updated = demoUsers.map(u => u.uid === user.uid ? { ...u, isActive: newStatus } : u);
+          localStorage.setItem('demo-users', JSON.stringify(updated));
+          setAllUsers(updated);
+          window.dispatchEvent(new CustomEvent('demo-users-updated'));
+        }
+      } else {
+        await updateDoc(doc(db, 'users', user.uid), {
+          isActive: newStatus
+        });
+      }
+      toast.success(newStatus ? "Acceso de cliente activado" : "Acceso de cliente bloqueado");
+    } catch (e) {
+      toast.error("Error al cambiar el estado del acceso");
+    }
+  };
+
+  const handleCopyCredentials = (user: UserProfile) => {
+    if (!editingClient) return;
+    const loginUrl = window.location.origin;
+    const message = `*🔑 Accesos al Portal de Clientes - Efecto Digital*\n\n¡Hola! Te compartimos tus accesos para ingresar a la plataforma y seguir en tiempo real el rendimiento de tu cuenta, leads e informes:\n\n📌 *Link de Ingreso:* ${loginUrl}\n👤 *Usuario:* \`${user.username || user.email}\`\n🔑 *Contraseña:* \`${user.password || '••••••••'}\`\n\nQue tengas un excelente día. ¡Seguimos sumando resultados! 🚀`;
+    
+    navigator.clipboard.writeText(message);
+    toast.success("Credenciales listas para pegar y enviar por WhatsApp/Email");
   };
 
   const handleCreateMember = async () => {
@@ -688,6 +880,10 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
                       {[...amClients, ...setterClients].filter((c, i, self) => self.findIndex(t => t.id === c.id) === i).map((client) => {
                         const isAM = client.accountManagerId === member.uid;
                         const isSetter = client.setterId === member.uid;
+                        const isAuthorized = profile?.role === 'director' || 
+                                             client.accountManagerId === profile?.uid || 
+                                             client.setterId === profile?.uid || 
+                                             (client.sharedAccountManagerIds && client.sharedAccountManagerIds.includes(profile?.uid || ''));
                         
                         return (
                           <div key={client.id} className="flex flex-col md:flex-row md:items-center justify-between p-4 hover:bg-muted/10 transition-colors group gap-4 md:gap-0">
@@ -701,6 +897,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
                                   <Select 
                                     value={client.status || 'onboarding'} 
                                     onValueChange={(v) => handleUpdateClientStatus(client.id, v as ClientStatus)}
+                                    disabled={!isAuthorized}
                                   >
                                     <SelectTrigger className={cn("h-5 min-w-[90px] px-2 text-[9px] font-black uppercase tracking-widest border-none shadow-none focus:ring-0", getClientStatusBadgeColor(client.status || 'onboarding'))}>
                                       <SelectValue placeholder="Estado" />
@@ -753,9 +950,10 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
                                 </div>
                                 <textarea 
                                   className="w-full min-h-[36px] max-h-[80px] text-[11px] bg-transparent border-none focus:ring-0 font-bold italic placeholder:text-muted-foreground/20 p-0 shadow-none text-foreground outline-none resize-none scrollbar-hide"
-                                  placeholder="Escribe algo importante sobre este cliente..."
+                                  placeholder={isAuthorized ? "Escribe algo importante sobre este cliente..." : "Acceso restringido para editar notas"}
                                   rows={1}
                                   value={client.notes || ''}
+                                  disabled={!isAuthorized}
                                   onChange={(e) => handleInlineNoteChange(client.id, e.target.value)}
                                   onInput={(e) => {
                                     const target = e.target as HTMLTextAreaElement;
@@ -767,57 +965,66 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
                             </div>
 
                             <div className="flex flex-wrap items-center gap-1 opacity-100 transition-opacity justify-end">
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                title="Panel de Control"
-                                className="h-8 gap-2 text-[10px] font-black uppercase text-muted-foreground hover:text-primary hover:bg-secondary/50 border border-transparent hover:border-primary/20"
-                                onClick={() => handleClientClick(client.id)}
-                              >
-                                <LayoutDashboard size={14} className="text-muted-foreground/60" />
-                                Escritorio
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                title="Ver Leads"
-                                className="h-8 gap-2 text-[10px] font-black uppercase text-muted-foreground hover:text-primary hover:bg-secondary/50 border border-transparent hover:border-primary/20"
-                                onClick={() => {
-                                  onClientSelect(client.id);
-                                  onTabChange('leads');
-                                }}
-                              >
-                                <UsersIcon size={14} className="text-muted-foreground/60" />
-                                Leads
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                title="Cronograma"
-                                className="h-8 gap-2 text-[10px] font-black uppercase text-muted-foreground hover:text-primary hover:bg-secondary/50 border border-transparent hover:border-primary/20"
-                                onClick={() => {
-                                  onClientSelect(client.id);
-                                  onTabChange('meetings');
-                                }}
-                              >
-                                <Calendar size={14} className="text-muted-foreground/60" />
-                                Agenda
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                title="Informes de Rendimiento"
-                                className="h-8 gap-2 text-[10px] font-black uppercase text-muted-foreground hover:text-primary hover:bg-secondary/50 border border-transparent hover:border-primary/20"
-                                onClick={() => {
-                                  onClientSelect(client.id);
-                                  onTabChange('reports');
-                                }}
-                              >
-                                <BarChart3 size={14} className="text-muted-foreground/60" />
-                                Informes
-                              </Button>
+                              {!isAuthorized ? (
+                                <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-tight text-muted-foreground/60 gap-1.5 bg-muted/20 border-border/50 py-1.5 px-3">
+                                  <Lock size={11} className="text-muted-foreground/50" />
+                                  Acceso Privado (Asignado)
+                                </Badge>
+                              ) : (
+                                <>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    title="Panel de Control"
+                                    className="h-8 gap-2 text-[10px] font-black uppercase text-muted-foreground hover:text-primary hover:bg-secondary/50 border border-transparent hover:border-primary/20"
+                                    onClick={() => handleClientClick(client.id)}
+                                  >
+                                    <LayoutDashboard size={14} className="text-muted-foreground/60" />
+                                    Escritorio
+                                  </Button>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    title="Ver Leads"
+                                    className="h-8 gap-2 text-[10px] font-black uppercase text-muted-foreground hover:text-primary hover:bg-secondary/50 border border-transparent hover:border-primary/20"
+                                    onClick={() => {
+                                      onClientSelect(client.id);
+                                      onTabChange('leads');
+                                    }}
+                                  >
+                                    <UsersIcon size={14} className="text-muted-foreground/60" />
+                                    Leads
+                                  </Button>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    title="Cronograma"
+                                    className="h-8 gap-2 text-[10px] font-black uppercase text-muted-foreground hover:text-primary hover:bg-secondary/50 border border-transparent hover:border-primary/20"
+                                    onClick={() => {
+                                      onClientSelect(client.id);
+                                      onTabChange('meetings');
+                                    }}
+                                  >
+                                    <Calendar size={14} className="text-muted-foreground/60" />
+                                    Agenda
+                                  </Button>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    title="Informes de Rendimiento"
+                                    className="h-8 gap-2 text-[10px] font-black uppercase text-muted-foreground hover:text-primary hover:bg-secondary/50 border border-transparent hover:border-primary/20"
+                                    onClick={() => {
+                                      onClientSelect(client.id);
+                                      onTabChange('reports');
+                                    }}
+                                  >
+                                    <BarChart3 size={14} className="text-muted-foreground/60" />
+                                    Informes
+                                  </Button>
+                                </>
+                              )}
                               
-                              {(profile?.role === 'director' || profile?.role === 'commercial' || (profile?.role === 'account_manager' && client.accountManagerId === profile.uid)) && (
+                              {(profile?.role === 'director' || profile?.role === 'commercial' || isAuthorized) && (
                                 <>
                                   <div className="h-4 w-px bg-border/40 mx-1" />
 
@@ -833,17 +1040,19 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
                                     <Zap size={13} fill="currentColor" /> 
                                     Ficha
                                   </Button>
-                                  <Button 
-                                    variant="ghost" 
-                                    size="sm" 
-                                    className="h-8 w-8 p-0 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDeleteClient(client.id, client.name);
-                                    }}
-                                  >
-                                    <Trash2 size={14} />
-                                  </Button>
+                                  {(profile?.role === 'director' || (profile?.role === 'account_manager' && client.accountManagerId === profile.uid)) && (
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm" 
+                                      className="h-8 w-8 p-0 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteClient(client.id, client.name);
+                                      }}
+                                    >
+                                      <Trash2 size={14} />
+                                    </Button>
+                                  )}
                                 </>
                               )}
                             </div>
@@ -933,6 +1142,34 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
                     {member.displayName}
                   </Button>
                 ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-foreground font-medium text-[#9955ff]">Account Managers de Soporte / Co-responsables (Opcional)</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {teamMembers
+                  .filter(member => member.uid !== selectedAMForNewClient && (member.role === 'account_manager' || member.role === 'director' || member.role === 'commercial'))
+                  .map(member => {
+                    const isSelected = selectedSharedAMsForNewClient.includes(member.uid);
+                    return (
+                      <Button
+                        key={member.uid}
+                        type="button"
+                        variant={isSelected ? 'default' : 'outline'}
+                        className={`justify-start font-bold text-[10px] h-8 transition-all ${isSelected ? 'bg-[#9955ff] hover:bg-[#9955ff]/90 text-white border-[#9955ff]' : 'border-border text-foreground'}`}
+                        onClick={() => {
+                          if (isSelected) {
+                            setSelectedSharedAMsForNewClient(selectedSharedAMsForNewClient.filter(id => id !== member.uid));
+                          } else {
+                            setSelectedSharedAMsForNewClient([...selectedSharedAMsForNewClient, member.uid]);
+                          }
+                        }}
+                      >
+                        <UsersIcon size={12} className="mr-1" />
+                        {member.displayName}
+                      </Button>
+                    );
+                  })}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -1277,6 +1514,220 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
               </div>
             </div>
 
+            {/* Sección de Acceso al Portal de Cliente */}
+            <div className="border border-border p-4 rounded-xl space-y-4">
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-[#9955ff] flex items-center gap-2">
+                <Key size={14} />
+                Acceso del Cliente (Portal)
+              </h4>
+
+              {(() => {
+                const clientUser = allUsers.find(u => u.role === 'client' && u.assignedClientId === editingClient?.id);
+                
+                if (isCreatingClientAccess) {
+                  return (
+                    <div className="bg-[#9955ff]/5 border border-[#9955ff]/20 rounded-lg p-3.5 space-y-3">
+                      <div className="text-xs font-bold text-[#9955ff] flex items-center gap-1.5">
+                        <Plus size={14} />
+                        Configurar Nuevo Acceso para {editingClient?.name}
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div className="space-y-1">
+                          <Label className="text-[9px] uppercase font-bold text-muted-foreground">Usuario / Login</Label>
+                          <Input
+                            value={clientUsername}
+                            onChange={e => setClientUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
+                            placeholder="nombre_usuario"
+                            className="h-8 text-xs bg-background border-border"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[9px] uppercase font-bold text-muted-foreground">Contraseña</Label>
+                          <Input
+                            value={clientPassword}
+                            onChange={e => setClientPassword(e.target.value)}
+                            placeholder="Clave nueva"
+                            className="h-8 text-xs bg-background border-border font-mono text-[#22c55e]"
+                          />
+                        </div>
+                        <div className="col-span-2 space-y-1">
+                          <Label className="text-[9px] uppercase font-bold text-muted-foreground">Email de Notificaciones u Oficial (Opcional)</Label>
+                          <Input
+                            value={clientEmail}
+                            onChange={e => setClientEmail(e.target.value)}
+                            placeholder="correo@cliente.com"
+                            className="h-8 text-xs bg-background border-border"
+                          />
+                          <p className="text-[9px] text-muted-foreground leading-snug">
+                            Si se deja vacío usará: <strong>{clientUsername || 'usuario'}@cliente.efectodigital.com.ar</strong>
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2 pt-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-[10px] font-bold"
+                          onClick={() => setIsCreatingClientAccess(false)}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-7 text-[10px] bg-primary text-primary-foreground font-black"
+                          onClick={handleSaveNewClientUser}
+                          disabled={creating}
+                        >
+                          {creating ? 'Guardando...' : 'Generar Acceso'}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (isEditingClientAccess && clientUser) {
+                  return (
+                    <div className="bg-muted/50 border border-border rounded-lg p-3.5 space-y-3">
+                      <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <Edit size={14} />
+                        Modificar Credenciales de Acceso
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div className="space-y-1">
+                          <Label className="text-[9px] uppercase font-bold text-muted-foreground">Usuario / Login</Label>
+                          <Input
+                            value={clientUsername}
+                            onChange={e => setClientUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
+                            className="h-8 text-xs bg-background border-border"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[9px] uppercase font-bold text-muted-foreground">Contraseña</Label>
+                          <Input
+                            value={clientPassword}
+                            onChange={e => setClientPassword(e.target.value)}
+                            className="h-8 text-xs bg-background border-border font-mono text-[#22c55e]"
+                          />
+                        </div>
+                        <div className="col-span-2 space-y-1">
+                          <Label className="text-[9px] uppercase font-bold text-muted-foreground">Email</Label>
+                          <Input
+                            value={clientEmail}
+                            onChange={e => setClientEmail(e.target.value)}
+                            className="h-8 text-xs bg-background border-border"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2 pt-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-[10px] font-bold"
+                          onClick={() => setIsEditingClientAccess(false)}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-7 text-[10px] bg-primary text-primary-foreground font-black"
+                          onClick={handleSaveEditedClientUser}
+                          disabled={creating}
+                        >
+                          {creating ? 'Guardando...' : 'Guardar Cambios'}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (clientUser) {
+                  return (
+                    <div className="bg-[#9955ff]/5 border border-[#9955ff]/15 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <div className={`h-2.5 w-2.5 rounded-full ${clientUser.isActive ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                          <span className="text-xs font-extrabold uppercase tracking-wide text-foreground">
+                            {clientUser.isActive ? 'Acceso Habilitado' : 'Acceso Suspendido'}
+                          </span>
+                        </div>
+                        <Badge className={`${clientUser.isActive ? 'bg-green-500/10 text-green-500 hover:bg-green-500/10' : 'bg-red-500/10 text-red-500 hover:bg-red-500/10'} uppercase text-[9px] font-bold border-none`}>
+                          {clientUser.isActive ? 'Activo' : 'Inactivo'}
+                        </Badge>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 text-[11px] mt-1">
+                        <div className="bg-background border border-border p-2 rounded-lg">
+                          <span className="text-[9px] text-muted-foreground font-bold uppercase block mb-0.5">Usuario</span>
+                          <span className="font-mono font-bold text-[#9955ff]">{clientUser.username || clientUser.email}</span>
+                        </div>
+                        <div className="bg-background border border-border p-2 rounded-lg">
+                          <span className="text-[9px] text-muted-foreground font-bold uppercase block mb-0.5">Contraseña</span>
+                          <span className="font-mono font-bold text-[#22c55e]">{clientUser.password || '••••••••'}</span>
+                        </div>
+                        <div className="col-span-2 bg-background border border-border p-2 rounded-lg">
+                          <span className="text-[9px] text-muted-foreground font-bold uppercase block mb-0.5">Email Registrado</span>
+                          <span className="font-mono text-foreground font-medium">{clientUser.email}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-1.5 pt-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-[11px] font-bold border-border bg-background hover:bg-muted text-foreground px-3 gap-1"
+                          onClick={() => handleCopyCredentials(clientUser)}
+                        >
+                          <Copy size={12} />
+                          Copiar WhatsApp
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-[11px] font-bold border-border bg-background hover:bg-muted text-foreground px-3 gap-1"
+                          onClick={() => handleEditClientUser(clientUser)}
+                        >
+                          <Edit size={12} />
+                          Modificar
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className={`h-8 text-[11px] font-bold border-border bg-background hover:bg-muted px-3 gap-1 ${clientUser.isActive ? 'text-red-500 hover:bg-red-500/5' : 'text-green-500 hover:bg-green-500/5'}`}
+                          onClick={() => handleToggleClientUserStatus(clientUser)}
+                        >
+                          <ShieldAlert size={12} />
+                          {clientUser.isActive ? 'Bloquear' : 'Activar'}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="bg-amber-500/5 border border-dashed border-amber-500/30 rounded-xl p-4 space-y-3 flex flex-col items-center text-center">
+                    <p className="text-[11px] text-muted-foreground max-w-sm">
+                      Este cliente aún no tiene un usuario de ingreso creado. Genera su acceso para que pueda visualizar sus campañas, leads e informes de rendimiento.
+                    </p>
+                    <Button
+                      type="button"
+                      className="bg-primary hover:bg-primary/95 text-primary-foreground font-black text-xs h-9 gap-1.5"
+                      onClick={handlePrepareCreateClientUser}
+                    >
+                      <Plus size={13} strokeWidth={3} />
+                      Crear Acceso en un Click
+                    </Button>
+                  </div>
+                );
+              })()}
+            </div>
+
             {/* Sección 6: Asignaciones de Equipo */}
             <div className="space-y-4 pt-2">
               <div className="space-y-2">
@@ -1322,6 +1773,37 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
                     </Button>
                   ))}
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] uppercase font-bold text-[#9955ff]">Account Managers de Soporte / Co-responsables (Opcional)</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {teamMembers
+                    .filter(member => member.uid !== selectedAMForNewClient && (member.role === 'account_manager' || member.role === 'director' || member.role === 'commercial'))
+                    .map(member => {
+                      const isSelected = selectedSharedAMsForNewClient.includes(member.uid);
+                      return (
+                        <Button
+                          key={member.uid}
+                          type="button"
+                          variant={isSelected ? 'default' : 'outline'}
+                          className={`justify-start font-bold text-[10px] h-8 px-2 transition-all ${isSelected ? 'bg-[#9955ff] text-white border-[#9955ff] hover:bg-[#9955ff]/90' : 'border-border text-foreground bg-muted/30'}`}
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedSharedAMsForNewClient(selectedSharedAMsForNewClient.filter(id => id !== member.uid));
+                            } else {
+                              setSelectedSharedAMsForNewClient([...selectedSharedAMsForNewClient, member.uid]);
+                            }
+                          }}
+                        >
+                          <UsersIcon size={12} className="mr-1 flex-shrink-0" />
+                          <span className="truncate">{member.displayName}</span>
+                        </Button>
+                      );
+                    })}
+                </div>
+                <p className="text-[9px] text-muted-foreground italic leading-tight mt-1">
+                  Los asesores seleccionados aquí podrán visualizar y co-gestionar el cliente por si necesitas que algún compañero te cubra.
+                </p>
               </div>
             </div>
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { collection, onSnapshot, query, orderBy, addDoc } from 'firebase/firestore';
 import { Client, UserProfile } from '../types';
+import { ROLE_PERMISSIONS } from '../lib/permissions';
 import { 
   Select, 
   SelectContent, 
@@ -56,10 +57,12 @@ export default function ClientSelector({ selectedClientId, onClientChange, isDem
         );
 
         // Filter based on role in demo mode
-        if (profile?.role === 'client' && profile.assignedClientId) {
-          setClients(allClients.filter(c => c.id === profile.assignedClientId));
-        } else if (profile?.role === 'account_manager') {
-          setClients(allClients.filter(c => c.accountManagerId === profile.uid));
+        if (profile && !ROLE_PERMISSIONS[profile.role]?.canViewClients) {
+          if (profile.role === 'client') {
+            setClients(allClients.filter(c => c.id === profile.assignedClientId));
+          } else {
+            setClients(allClients.filter(c => c.accountManagerId === profile.uid || c.setterId === profile.uid));
+          }
         } else {
           setClients(allClients);
         }
@@ -80,8 +83,8 @@ export default function ClientSelector({ selectedClientId, onClientChange, isDem
         !c.name.toLowerCase().includes('lead flow')
       );
 
-      // Filter based on role - All team members only see assigned clients unless Director
-      if (profile && profile.role !== 'director') {
+      // Filter based on role - Check canViewClients permission
+      if (profile && !ROLE_PERMISSIONS[profile.role]?.canViewClients) {
         if (profile.role === 'client') {
           clientsData = clientsData.filter(c => c.id === profile.assignedClientId);
         } else {

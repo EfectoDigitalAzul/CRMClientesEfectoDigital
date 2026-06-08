@@ -55,7 +55,7 @@ import LeadDetails from './components/LeadDetails';
 import ClientReportsDashboard from './components/ClientReportsDashboard';
 import ClientTemplates from './components/ClientTemplates';
 import TrashBin from './components/TrashBin';
-import { Briefcase, Target, User as UserIcon, Lock, ShieldCheck, Mail, History as HistoryIcon, Activity, BarChart3, ChartPie, FileCode, Trash2 } from 'lucide-react';
+import { Briefcase, Target, User as UserIcon, Lock, ShieldCheck, Mail, History as HistoryIcon, Activity, BarChart3, ChartPie, FileCode, Trash2, ArrowLeft } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -88,11 +88,62 @@ export default function App() {
     (window as any).setLeadViewMode = setLeadViewMode;
     (window as any).isDemoMode = isDemoMode;
   }, [isDemoMode]);
+
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isLeadFormOpen, setIsLeadFormOpen] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [targetTaskId, setTargetTaskId] = useState<string | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+
+  const [navigationHistory, setNavigationHistory] = useState<Array<{ tab: string; clientId: string; leadViewMode: 'table' | 'kanban' | 'followup' }>>([]);
+  const isBackNavigating = React.useRef(false);
+
+  useEffect(() => {
+    if (!profile) {
+      setNavigationHistory([]);
+    } else {
+      setNavigationHistory([{ tab: activeTab, clientId: selectedClientId, leadViewMode }]);
+    }
+  }, [profile]);
+
+  useEffect(() => {
+    if (!profile) return;
+    
+    if (isBackNavigating.current) {
+      isBackNavigating.current = false;
+      return;
+    }
+
+    setNavigationHistory(prev => {
+      const last = prev[prev.length - 1];
+      if (last && last.tab === activeTab && last.clientId === selectedClientId && last.leadViewMode === leadViewMode) {
+        return prev;
+      }
+      const newHistory = [...prev, { tab: activeTab, clientId: selectedClientId, leadViewMode }];
+      if (newHistory.length > 30) {
+        newHistory.shift();
+      }
+      return newHistory;
+    });
+  }, [activeTab, selectedClientId, leadViewMode, profile]);
+
+  const goBack = () => {
+    if (navigationHistory.length <= 1) return;
+    
+    isBackNavigating.current = true;
+    
+    const previousState = navigationHistory[navigationHistory.length - 2];
+    
+    setNavigationHistory(prev => {
+      const copy = [...prev];
+      copy.pop(); // remove current state
+      return copy;
+    });
+
+    setActiveTab(previousState.tab);
+    setSelectedClientId(previousState.clientId);
+    setLeadViewMode(previousState.leadViewMode);
+  };
   const [notifications, setNotifications] = useState<any[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -1278,6 +1329,18 @@ export default function App() {
       <main className="flex flex-1 flex-col overflow-hidden">
         <header className="flex h-16 items-center justify-between border-b bg-card px-4 md:px-8 border-border">
           <div className="flex items-center gap-4">
+            {navigationHistory.length > 1 && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-1.5 px-3 h-9 font-bold bg-card border-border text-foreground hover:bg-muted border text-xs shadow-sm transition-all flex items-center shrink-0"
+                onClick={goBack}
+              >
+                <ArrowLeft size={14} className="text-primary" />
+                <span className="hidden sm:inline">Atrás</span>
+              </Button>
+            )}
+
             <Button 
               variant="ghost" 
               size="icon" 

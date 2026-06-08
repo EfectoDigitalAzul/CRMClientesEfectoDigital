@@ -39,6 +39,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from './components/ui/avatar';
 import { Toaster } from 'sonner';
 import { toast } from 'sonner';
+import { format, parseISO, differenceInDays } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 // Components (will be created in separate files)
 import LeadList from './components/LeadList';
@@ -1006,6 +1008,30 @@ export default function App() {
     return null;
   };
 
+  const getDurationString = (start?: string, end?: string) => {
+    if (!start) return '---';
+    try {
+      const startDate = parseISO(start);
+      const endDate = end ? parseISO(end) : new Date();
+      const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays < 30) return `${diffDays} días`;
+      const months = Math.floor(diffDays / 30);
+      const remainingDays = diffDays % 30;
+      
+      if (months < 12) {
+        return remainingDays > 0 ? `${months}m ${remainingDays}d` : `${months} meses`;
+      }
+      
+      const years = Math.floor(months / 12);
+      const remainingMonths = months % 12;
+      return remainingMonths > 0 ? `${years}a ${remainingMonths}m` : `${years} años`;
+    } catch {
+      return '---';
+    }
+  };
+
   const handlePromoRenewal = async (status: 'will_renew' | 'will_not_renew') => {
     if (!selectedClient) return;
     
@@ -1506,6 +1532,157 @@ export default function App() {
               </div>
             );
           })()}
+
+          {/* CLIENT QUICK META INFO BANNER */}
+          {selectedClient && ['dashboard', 'templates', 'leads', 'meetings'].includes(activeTab) && (
+            <div className="mb-8 p-6 bg-card border border-border/40 rounded-[2rem] shadow-sm backdrop-blur-sm">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                
+                {/* Left: Client name, status & plan */}
+                <div className="flex items-center gap-4">
+                  <div className="h-14 w-14 rounded-2xl bg-primary/10 text-primary border border-primary/20 flex items-center justify-center font-black text-xl italic shrink-0">
+                    {selectedClient.name.substring(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-xl font-black text-foreground uppercase italic tracking-tighter leading-none">{selectedClient.name}</h3>
+                      {selectedClient.status && (
+                        <span className={`text-[8px] font-black px-2 py-0.5 rounded-md uppercase border-none ${
+                          ['completed', 'cancelled'].includes(selectedClient.status) 
+                            ? 'bg-muted text-muted-foreground' 
+                            : 'bg-emerald-500/10 text-emerald-500'
+                        }`}>
+                          {selectedClient.status === 'completed' || selectedClient.status === 'cancelled' ? '📁 Inactivo' : '● Activo'}
+                        </span>
+                      )}
+                      <span className="text-[8px] font-black px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 uppercase italic">
+                        PLAN: {selectedClient.planName || 'STANDARD'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      {selectedClient.websiteUrl ? (
+                        <a 
+                          href={selectedClient.websiteUrl} 
+                          target="_blank" 
+                          referrerPolicy="no-referrer" 
+                          className="text-[10px] text-muted-foreground hover:text-primary transition-colors flex items-center gap-1 font-semibold"
+                        >
+                          🌐 {selectedClient.websiteUrl}
+                        </a>
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground/60 italic">Sin sitio web cargado</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right: The 3 requested widgets (Antigüedad, Renovaciones, Reuniones Agendadas) + Old Clients history popover */}
+                <div className="flex flex-wrap items-stretch gap-4">
+                  
+                  {/* Antiquity/Fechas Widget */}
+                  <div className="p-4 bg-muted/35 rounded-2xl border border-border/15 flex flex-col justify-center min-w-[150px]">
+                    <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1">
+                      <Calendar size={10} className="text-emerald-500" />
+                      Antigüedad y Fechas
+                    </span>
+                    <span className="text-xs font-extrabold text-foreground leading-tight">
+                      {getDurationString(selectedClient.contractStartDate, selectedClient.contractEndDate)}
+                    </span>
+                    <span className="text-[9px] text-muted-foreground/80 mt-1">
+                      Inicio: {selectedClient.contractStartDate ? selectedClient.contractStartDate.split('-').reverse().join('/') : '---'}
+                    </span>
+                  </div>
+
+                  {/* Renewals Widget */}
+                  <div className="p-4 bg-muted/35 rounded-2xl border border-border/15 flex flex-col justify-center min-w-[150px]">
+                    <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1">
+                      <HistoryIcon size={10} className="text-primary" />
+                      Renovaciones Contractuales
+                    </span>
+                    <span className="text-xs font-black text-foreground flex items-center gap-1.5 leading-none">
+                      Acumulado: <span className="text-sm text-primary font-black italic">{selectedClient.renewalCount || 0}</span>
+                    </span>
+                    <div className="mt-1.5">
+                      {selectedClient.renewalStatus === 'will_renew' && (
+                        <span className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[8px] font-black px-1.5 py-0.5 rounded uppercase">
+                          SÍ, RENUEVA ✅
+                        </span>
+                      )}
+                      {selectedClient.renewalStatus === 'will_not_renew' && (
+                        <span className="bg-rose-500/15 text-rose-600 dark:text-rose-400 text-[8px] font-black px-1.5 py-0.5 rounded uppercase">
+                          NO RENUEVA ❌
+                        </span>
+                      )}
+                      {(!selectedClient.renewalStatus || selectedClient.renewalStatus === 'unknown') && (
+                        <span className="bg-amber-500/15 text-amber-600 dark:text-amber-500 text-[8px] font-black px-1.5 py-0.5 rounded uppercase">
+                          EN NEGOCIACIÓN ⏳
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Scheduled Meetings Widget */}
+                  <div className="p-4 bg-muted/35 rounded-2xl border border-border/15 flex flex-col justify-center min-w-[150px]">
+                    <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1">
+                      <Clock size={10} className="text-amber-500 animate-pulse" />
+                      Reuniones Agendadas
+                    </span>
+                    <span className="text-sm font-black text-foreground italic flex items-baseline gap-1">
+                      {meetings.filter(m => m.status === 'scheduled' || m.status === 'pending' || m.status === 'reschedule').length}
+                      <span className="text-[8px] font-bold text-muted-foreground uppercase not-italic">agendadas</span>
+                    </span>
+                    <span className="text-[9px] text-muted-foreground/80 mt-1">
+                      {meetings.length} reuniones en total
+                    </span>
+                  </div>
+
+                  {/* Historical Clients Shortcut Popup */}
+                  {isStaff && (
+                    <Popover>
+                      <PopoverTrigger 
+                        className="h-auto self-center rounded-2xl border border-dashed border-border/40 bg-muted/10 hover:bg-muted text-[10px] font-black uppercase tracking-wider px-4 py-3 flex items-center gap-1.5 transition-colors cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-primary/20"
+                      >
+                        <HistoryIcon size={14} className="opacity-75 text-primary" />
+                        📁 Historial Viejos ({clients.filter(c => c.status && ['completed', 'cancelled'].includes(c.status)).length})
+                      </PopoverTrigger>
+                      <PopoverContent align="end" className="w-80 p-0 overflow-hidden bg-card border border-border/40 shadow-xl rounded-2xl">
+                        <div className="p-4 bg-muted/10 border-b border-border/20">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-primary italic">Historial de Clientes Viejos / Históricos</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">Haz clic para ir directamente a su espacio de trabajo y ver su historial.</p>
+                        </div>
+                        <div className="max-h-[250px] overflow-y-auto">
+                          {clients.filter(c => c.status && ['completed', 'cancelled'].includes(c.status)).length === 0 ? (
+                            <p className="p-6 text-center text-xs text-muted-foreground italic">Sin clientes inactivos en el historial</p>
+                          ) : (
+                            clients.filter(c => c.status && ['completed', 'cancelled'].includes(c.status)).map(oldClient => (
+                              <div 
+                                key={oldClient.id} 
+                                className="p-3.5 hover:bg-muted/50 border-b border-border/10 last:border-none cursor-pointer flex items-center justify-between transition-colors"
+                                onClick={() => {
+                                  setSelectedClientId(oldClient.id);
+                                  setActiveTab('dashboard');
+                                }}
+                              >
+                                <div className="space-y-0.5">
+                                  <p className="text-xs font-extrabold text-foreground">{oldClient.name}</p>
+                                  <p className="text-[9px] text-muted-foreground uppercase font-semibold">PLAN: {oldClient.planName || 'STANDARD'}</p>
+                                </div>
+                                <span className="text-[8px] bg-muted text-muted-foreground px-2 py-0.5 rounded font-black italic uppercase leading-none border border-border/25">
+                                  Inactivo
+                                </span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  )}
+
+                </div>
+
+              </div>
+            </div>
+          )}
 
           {activeTab === 'dashboard' && <DashboardStats profile={profile} isDemoMode={isDemoMode} clientId={selectedClientId} />}
           {activeTab === 'templates' && selectedClient && (

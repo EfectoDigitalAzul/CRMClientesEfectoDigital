@@ -96,18 +96,39 @@ export default function TeamPerformance({ isDemoMode, profile, onClientSelect, o
     // Percentage between meetings and closures
     const meetingsToClosures = held > 0 ? Math.round((closed / held) * 100) : 0;
 
+    // Format Start Date safely
+    let formattedStartDate = '---';
+    if (client.contractStartDate) {
+      try {
+        formattedStartDate = format(parseISO(client.contractStartDate), "dd/MM/yyyy");
+      } catch (e) {
+        formattedStartDate = client.contractStartDate;
+      }
+    } else if (client.createdAt) {
+      try {
+        formattedStartDate = format(parseISO(client.createdAt), "dd/MM/yyyy");
+      } catch (e) {
+        formattedStartDate = '---';
+      }
+    }
+
+    // Filter and sort scheduled/pending meetings (upcoming)
+    const scheduledMeetings = clientMeetings
+      .filter(m => m.status === 'pending' || m.status === 'reschedule')
+      .sort((a, b) => new Date(`${a.date}T${a.time || '00:00'}`).getTime() - new Date(`${b.date}T${b.time || '00:00'}`).getTime());
+
     return (
       <Card className={cn(
-        "group border rounded-[2rem] shadow-none bg-card transition-all overflow-hidden",
+        "group border rounded-[2rem] shadow-none bg-card transition-all duration-500 overflow-hidden",
         isActive
-          ? "border-emerald-500/20 hover:border-emerald-500/40" 
-          : "border-border/20 opacity-90 hover:opacity-100"
+          ? "border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-lg hover:shadow-emerald-500/5" 
+          : "border-border/10 opacity-75 grayscale contrast-75 hover:opacity-100 hover:grayscale-0 hover:contrast-100 hover:shadow-lg hover:shadow-primary/5"
       )}>
         <div className="p-8">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="flex items-center gap-5">
               <div className={cn(
-                "h-16 w-16 rounded-3xl flex items-center justify-center border transition-transform group-hover:scale-105 duration-500",
+                "h-16 w-16 rounded-3xl flex items-center justify-center border transition-transform group-hover:scale-105 duration-500 shrink-0",
                 isActive 
                   ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" 
                   : "bg-muted text-muted-foreground border-border/40"
@@ -115,9 +136,9 @@ export default function TeamPerformance({ isDemoMode, profile, onClientSelect, o
                 {isActive ? <TrendingUp size={28} /> : <HistoryIcon size={28} />}
               </div>
               <div className="space-y-1">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                   <h4 className="font-black text-xl text-foreground uppercase italic tracking-tighter leading-none">{client.name}</h4>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     {client.status && (
                       <Badge className={cn("border-none text-[8px] font-black px-2 py-0.5 rounded-md", getClientStatusBadgeColor(client.status))}>
                         {getClientStatusLabel(client.status)}
@@ -125,28 +146,37 @@ export default function TeamPerformance({ isDemoMode, profile, onClientSelect, o
                     )}
                     <Badge className={cn(
                       "border-none text-[8px] font-black px-2 py-0.5 rounded-md",
-                      client.accountManagerId === memberUid ? "bg-blue-500/10 text-blue-600" : "bg-purple-500/10 text-purple-600"
+                      client.accountManagerId === memberUid ? "bg-blue-500/10 text-blue-600 border border-blue-500/20" : "bg-purple-500/10 text-purple-600 border border-purple-500/20"
                     )}>
                       {client.accountManagerId === memberUid ? 'ACCOUNT' : 'SETTER'}
                     </Badge>
+                    {!isActive && (
+                      <Badge className="border-none text-[8px] font-black px-2 py-0.5 rounded-md bg-muted text-muted-foreground uppercase italic">
+                        Histórico / Viejo
+                      </Badge>
+                    )}
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2">
                   <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] italic">
                     PLAN: {client.planName || 'STANDARD'}
                   </p>
                   <span className="h-1 w-1 rounded-full bg-muted-foreground/30 hidden md:block" />
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
-                    <Clock size={12} className="opacity-40" />
-                    Permanencia: <span className="text-foreground">{duration}</span>
-                    <span className="opacity-20 mx-1">|</span>
-                    Renovaciones: <span className="text-foreground font-black">{client.renewalCount || 0}</span>
+                    <Calendar size={12} className="opacity-50 text-emerald-500" />
+                    Fecha Inicio: <span className="text-foreground font-black">{formattedStartDate}</span>
+                  </p>
+                  <span className="h-1 w-1 rounded-full bg-muted-foreground/30 hidden md:block" />
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
+                    <Clock size={12} className="opacity-50 text-amber-500" />
+                    Antigüedad: <span className="text-foreground font-black">{duration}</span>
                   </p>
                 </div>
               </div>
             </div>
             
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <Button 
                 variant="default" 
                 size="sm" 
@@ -159,7 +189,7 @@ export default function TeamPerformance({ isDemoMode, profile, onClientSelect, o
                 <FileText size={14} className="mr-2" /> Descargar Informe Total
               </Button>
               <div className="bg-muted/30 px-4 py-2 rounded-xl border border-border/10 text-right">
-                 <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest mb-0.5">Renovación</p>
+                 <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest mb-0.5">Próxima Renov.</p>
                  <p className="text-[10px] font-black italic text-primary">
                    {client.renewalDate ? format(parseISO(client.renewalDate), "dd/MM/yy") : 
                     (client.contractEndDate ? format(parseISO(client.contractEndDate), "dd/MM/yy") : 'En revisión')}
@@ -199,16 +229,61 @@ export default function TeamPerformance({ isDemoMode, profile, onClientSelect, o
             </div>
           )}
 
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-6 mt-8 pt-8 border-t border-border/30">
+          {/* Scheduled Meetings List */}
+          {scheduledMeetings.length > 0 && (
+            <div className="mt-6 p-5 bg-amber-500/5 rounded-3xl border border-amber-500/10">
+              <p className="text-[9px] font-black uppercase text-amber-600 dark:text-amber-500 tracking-wider mb-3 flex items-center gap-1.5">
+                <Calendar className="animate-pulse text-amber-500" size={14} />
+                Próximas Reuniones Agendadas ({scheduledMeetings.length})
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {scheduledMeetings.slice(0, 3).map((meeting) => {
+                  let meetingDateStr = '---';
+                  try {
+                    meetingDateStr = format(parseISO(meeting.date), "EEEE dd 'de' MMMM", { locale: es });
+                  } catch {
+                    meetingDateStr = meeting.date;
+                  }
+                  meetingDateStr = meetingDateStr.charAt(0).toUpperCase() + meetingDateStr.slice(1);
+
+                  return (
+                    <div key={meeting.id} className="flex items-center justify-between p-3.5 bg-card/60 rounded-2xl border border-border/40 hover:border-amber-500/30 transition-all shadow-sm">
+                      <div className="space-y-0.5">
+                        <p className="text-[11px] font-black text-foreground uppercase tracking-tight leading-normal">{meeting.leadName}</p>
+                        <p className="text-[9px] font-bold text-muted-foreground">{meetingDateStr}</p>
+                      </div>
+                      <div className="text-right flex flex-col items-end gap-1">
+                        <Badge variant="outline" className="text-[9px] font-black border-amber-500/20 text-amber-600 dark:text-amber-500 bg-amber-500/5 px-2 py-0.5 rounded-md">
+                          {meeting.time || '--- hs'}
+                        </Badge>
+                        {meeting.meetingLink && (
+                          <a 
+                            href={meeting.meetingLink} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-[8px] font-black text-primary hover:underline uppercase flex items-center gap-0.5"
+                          >
+                            Ir a sala ↗
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 mt-8 pt-8 border-t border-border/30">
             <div className="space-y-1">
               <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Leads Totales</p>
               <p className="text-2xl font-black text-foreground">{clientLeads.length}</p>
             </div>
             <div className="space-y-1">
               <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Reuniones</p>
-              <div className="flex items-baseline gap-2">
+              <div className="flex items-baseline gap-2 flex-wrap">
                 <p className="text-2xl font-black text-foreground">{held}</p>
-                <p className="text-[10px] font-bold text-muted-foreground">AGENDADAS: {clientMeetings.length}</p>
+                <p className="text-[8px] font-black text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded leading-none">TOTAL: {clientMeetings.length}</p>
               </div>
             </div>
             <div className="space-y-1">
@@ -225,9 +300,32 @@ export default function TeamPerformance({ isDemoMode, profile, onClientSelect, o
               </div>
             </div>
             <div className="space-y-1">
+              <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Renovaciones</p>
+              <div className="flex flex-col gap-1 mt-1">
+                <span className="text-lg font-black text-primary leading-tight">
+                  {client.renewalCount || 0}
+                </span>
+                {client.renewalStatus === 'will_renew' && (
+                  <Badge className="border-none bg-emerald-500/10 text-emerald-500 text-[8px] font-black px-1.5 py-0.5 w-fit rounded">
+                    SÍ, RENUEVA
+                  </Badge>
+                )}
+                {client.renewalStatus === 'will_not_renew' && (
+                  <Badge className="border-none bg-rose-500/10 text-rose-500 text-[8px] font-black px-1.5 py-0.5 w-fit rounded">
+                    NO RENUEVA
+                  </Badge>
+                )}
+                {(!client.renewalStatus || client.renewalStatus === 'unknown') && (
+                  <Badge className="border-none bg-amber-500/10 text-amber-500 text-[8px] font-black px-1.5 py-0.5 w-fit rounded">
+                    EN REVISIÓN
+                  </Badge>
+                )}
+              </div>
+            </div>
+            <div className="space-y-1">
               <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Status ROI</p>
               <Badge className={cn(
-                "text-[9px] font-black mt-2",
+                "text-[9px] font-black mt-2 border-none",
                 closed > 2 ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"
               )}>
                 {closed > 2 ? 'RENTABLE' : 'EN DESARROLLO'}
@@ -765,7 +863,7 @@ export default function TeamPerformance({ isDemoMode, profile, onClientSelect, o
 
           {(() => {
             const stats = getMemberStats(selectedMember.uid);
-            const { amActive, setterActive, historicalClients, totalLeads, totalMeetings, closedWon, heldMeetings, meetingAttendanceRate, conversionRate, closingRate, totalRenewals } = stats;
+            const { activeClients, amActive, setterActive, historicalClients, totalLeads, totalMeetings, closedWon, heldMeetings, meetingAttendanceRate, conversionRate, closingRate, totalRenewals } = stats;
 
             return (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -787,49 +885,173 @@ export default function TeamPerformance({ isDemoMode, profile, onClientSelect, o
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 gap-3">
-                        <div className="flex items-center justify-between p-4 bg-muted/20 rounded-2xl border border-border/10">
-                          <div className="flex items-center gap-3">
-                            <Target className="text-primary" size={18} />
-                            <span className="text-[10px] font-black uppercase tracking-widest">Conversión</span>
+                      {(() => {
+                        const totalClients = activeClients.length + historicalClients.length;
+                        const retentionRate = totalClients > 0 ? Math.round((activeClients.length / totalClients) * 100) : 100;
+
+                        return (
+                          <div className="grid grid-cols-1 gap-3">
+                            {/* Total de clientes activos */}
+                            <div className="flex items-center justify-between p-4 bg-muted/20 rounded-2xl border border-border/10">
+                              <div className="flex items-center gap-3">
+                                <Users size={18} className="text-emerald-500" />
+                                <span className="text-[10px] font-black uppercase tracking-widest text-foreground">Total de clientes activos</span>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-sm font-black text-emerald-500 italic">{activeClients.length}</span>
+                                <p className="text-[8px] font-bold text-muted-foreground uppercase">{amActive.length} AM / {setterActive.length} SETTER</p>
+                              </div>
+                            </div>
+
+                            {/* Total de renovaciones */}
+                            <div className="flex items-center justify-between p-4 bg-primary/10 rounded-2xl border border-primary/20">
+                              <div className="flex items-center gap-3">
+                                <HistoryIcon className="text-primary" size={18} />
+                                <span className="text-[10px] font-black uppercase tracking-widest text-foreground">Total de renovaciones</span>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-sm font-black text-primary italic">{totalRenewals}</span>
+                                <p className="text-[8px] font-black uppercase text-primary">TOTAL RENOVS.</p>
+                              </div>
+                            </div>
+
+                            {/* Total de clientes inactivos */}
+                            <div className="flex items-center justify-between p-4 bg-muted/20 rounded-2xl border border-border/10">
+                              <div className="flex items-center gap-3">
+                                <Briefcase className="text-muted-foreground" size={18} />
+                                <span className="text-[10px] font-black uppercase tracking-widest text-foreground">Total de clientes inactivos</span>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-sm font-black text-muted-foreground italic">{historicalClients.length}</span>
+                                <p className="text-[8px] font-bold text-muted-foreground uppercase">CUENTAS HISTÓRICAS</p>
+                              </div>
+                            </div>
+
+                            {/* Tasa de retención */}
+                            <div className="flex items-center justify-between p-4 bg-muted/20 rounded-2xl border border-border/10">
+                              <div className="flex items-center gap-3">
+                                <TrendingUp className="text-blue-500" size={18} />
+                                <span className="text-[10px] font-black uppercase tracking-widest text-foreground">Tasa de retencion</span>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-sm font-black text-blue-500 italic">{retentionRate}%</span>
+                                <p className="text-[8px] font-bold text-muted-foreground uppercase">{activeClients.length} DE {totalClients} CUENTAS</p>
+                              </div>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <span className="text-sm font-black">{conversionRate}%</span>
-                            <p className="text-[8px] font-bold text-muted-foreground uppercase">{totalLeads} LEADS / {closedWon} WON</p>
-                          </div>
+                        );
+                      })()}
+
+                      {/* Section: Active Clients details & Old Clients selector */}
+                      <div className="pt-6 border-t border-border/15 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-primary italic">📋 Clientes Activos ({activeClients.length})</p>
+                        </div>
+                        
+                        <div className="space-y-3">
+                          {activeClients.length === 0 ? (
+                            <p className="text-[10px] text-muted-foreground/60 italic text-center py-2">Sin clientes asignados en este rol</p>
+                          ) : (
+                            activeClients.map((client) => {
+                              const clientMeetingsCou = allMeetings.filter(m => m.clientId === client.id && (m.status === 'scheduled' || m.status === 'pending' || m.status === 'reschedule')).length;
+                              const clientDuration = getDurationString(client.contractStartDate, client.contractEndDate);
+                              
+                              return (
+                                <div key={client.id} className="p-3 bg-muted/15 rounded-xl border border-border/10 space-y-1.5 hover:bg-muted/30 transition-colors">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-extrabold text-foreground tracking-tight truncate max-w-[145px] uppercase italic">
+                                      {client.name}
+                                    </span>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="h-5 w-5 hover:bg-primary/20 text-primary"
+                                      onClick={() => {
+                                        onClientSelect(client.id);
+                                        onTabChange('dashboard');
+                                      }}
+                                      title="Abrir espacio de trabajo"
+                                    >
+                                      <ArrowUpRight size={12} />
+                                    </Button>
+                                  </div>
+                                  
+                                  <div className="space-y-1">
+                                    {/* Duration / Start Date */}
+                                    <p className="text-[9px] text-muted-foreground flex items-center gap-1.5">
+                                      <Calendar size={10} className="text-emerald-500 shrink-0" />
+                                      <span>Antigüedad: <span className="font-bold text-foreground">{clientDuration}</span></span>
+                                    </p>
+                                    
+                                    {/* Renewals */}
+                                    <div className="text-[9px] text-muted-foreground flex items-center justify-between gap-1">
+                                      <span className="flex items-center gap-1.5">
+                                        <HistoryIcon size={10} className="text-primary shrink-0" />
+                                        <span>Renovaciones: <span className="font-bold text-foreground">{client.renewalCount || 0}</span></span>
+                                      </span>
+                                      {client.renewalStatus === 'will_renew' && (
+                                        <span className="text-[8px] font-black text-emerald-500 uppercase">SÍ ✅</span>
+                                      )}
+                                      {client.renewalStatus === 'will_not_renew' && (
+                                        <span className="text-[8px] font-black text-rose-500 uppercase">NO ❌</span>
+                                      )}
+                                      {(!client.renewalStatus || client.renewalStatus === 'unknown') && (
+                                        <span className="text-[8px] font-black text-amber-500 uppercase">NEGOC. ⏳</span>
+                                      )}
+                                    </div>
+
+                                    {/* Scheduled Meetings */}
+                                    <p className="text-[9px] text-muted-foreground flex items-center gap-1.5">
+                                      <Clock size={10} className="text-amber-500 shrink-0" />
+                                      <span>Reuniones Agendadas: <span className="font-bold text-foreground">{clientMeetingsCou}</span></span>
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
                         </div>
 
-                        <div className="flex items-center justify-between p-4 bg-muted/20 rounded-2xl border border-border/10">
-                          <div className="flex items-center gap-3">
-                            <Users size={18} className="text-emerald-500" />
-                            <span className="text-[10px] font-black uppercase tracking-widest">Cierre (Reu/Cie)</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-sm font-black text-emerald-500 italic">{closingRate}%</span>
-                            <p className="text-[8px] font-bold text-muted-foreground uppercase">{heldMeetings} HELD / {closedWon} WON</p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between p-4 bg-muted/20 rounded-2xl border border-border/10">
-                          <div className="flex items-center gap-3">
-                            <Clock className="text-amber-500" size={18} />
-                            <span className="text-[10px] font-black uppercase tracking-widest">Show Rate</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-sm font-black italic">{meetingAttendanceRate}%</span>
-                            <p className="text-[8px] font-bold text-muted-foreground uppercase">{totalMeetings} REUNS / {heldMeetings} HELD</p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between p-4 bg-primary/10 rounded-2xl border border-primary/20">
-                          <div className="flex items-center gap-3">
-                            <HistoryIcon className="text-primary" size={18} />
-                            <span className="text-[10px] font-black uppercase tracking-widest">Renovaciones</span>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-black italic">{totalRenewals}</p>
-                            <p className="text-[8px] font-black uppercase text-primary">TOTAL RENOVS.</p>
-                          </div>
+                        {/* Dropdown Popover for Old/Historical Clients */}
+                        <div className="pt-2">
+                          <Popover>
+                            <PopoverTrigger 
+                              className="w-full h-9 rounded-xl border border-dashed border-border/40 bg-muted/5 hover:bg-muted text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-primary/20"
+                            >
+                              <HistoryIcon size={12} className="opacity-75 text-primary" />
+                              📁 Historial Viejos ({historicalClients.length})
+                            </PopoverTrigger>
+                            <PopoverContent align="center" className="w-64 p-0 overflow-hidden bg-card border border-border/40 shadow-xl rounded-2xl">
+                              <div className="p-3.5 bg-muted/10 border-b border-border/20">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-primary italic">Historial de Clientes Viejos</p>
+                                <p className="text-[9px] text-muted-foreground mt-0.5 leading-snug">Selecciona un cliente para abrir su panel directo.</p>
+                              </div>
+                              <div className="max-h-[180px] overflow-y-auto">
+                                {historicalClients.length === 0 ? (
+                                  <p className="p-4 text-center text-[10px] text-muted-foreground italic">Sin clientes inactivos en el historial</p>
+                                ) : (
+                                  historicalClients.map(oldClient => (
+                                    <div 
+                                      key={oldClient.id} 
+                                      className="p-3 hover:bg-muted/50 border-b border-border/10 last:border-none cursor-pointer flex items-center justify-between transition-colors"
+                                      onClick={() => {
+                                        onClientSelect(oldClient.id);
+                                        onTabChange('dashboard');
+                                      }}
+                                    >
+                                      <div>
+                                        <p className="text-xs font-black text-foreground italic uppercase tracking-tight">{oldClient.name}</p>
+                                        <p className="text-[8px] text-muted-foreground uppercase font-semibold">PLAN: {oldClient.planName || 'STANDARD'}</p>
+                                      </div>
+                                      <span className="text-[8px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded font-black italic uppercase border border-border/15">
+                                        Inactivo
+                                      </span>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
                         </div>
                       </div>
                     </div>
@@ -906,7 +1128,7 @@ export default function TeamPerformance({ isDemoMode, profile, onClientSelect, o
                         {historicalClients.length}
                       </Badge>
                     </div>
-                    <div className="grid grid-cols-1 gap-4 opacity-70 grayscale">
+                    <div className="grid grid-cols-1 gap-4">
                       {historicalClients.length > 0 ? (
                         historicalClients.map(client => (
                           <ClientCard key={client.id} client={client} memberUid={selectedMember.uid} />

@@ -6,7 +6,9 @@ import { ROLE_PERMISSIONS } from '../lib/permissions';
 import { 
   Select, 
   SelectContent, 
+  SelectGroup,
   SelectItem, 
+  SelectLabel,
   SelectTrigger, 
   SelectValue 
 } from './ui/select';
@@ -153,11 +155,35 @@ export default function ClientSelector({ selectedClientId, onClientChange, isDem
               No hay clientes asignados
             </div>
           )}
-          {clients.map((client) => (
-            <SelectItem key={client.id} value={client.id} className="text-xs font-medium focus:bg-muted focus:text-foreground">
-              {client.name}
-            </SelectItem>
-          ))}
+          {(() => {
+            const activeClients = clients.filter(c => !c.status || ['onboarding', 'active', 'paused'].includes(c.status));
+            const inactiveClients = clients.filter(c => c.status && ['completed', 'cancelled'].includes(c.status));
+
+            return (
+              <>
+                {activeClients.length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel className="text-[9px] font-black uppercase tracking-widest text-primary px-3.5 py-1.5 italic">Clientes Activos</SelectLabel>
+                    {activeClients.map((client) => (
+                      <SelectItem key={client.id} value={client.id} className="text-xs font-semibold focus:bg-muted focus:text-foreground pl-4">
+                        {client.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+                {inactiveClients.length > 0 && (
+                  <SelectGroup className="border-t border-border/15 mt-1 pt-1 bg-muted/5">
+                    <SelectLabel className="text-[9px] font-black uppercase tracking-widest text-muted-foreground px-3.5 py-1.5 italic">Histórico / Clientes Viejos</SelectLabel>
+                    {inactiveClients.map((client) => (
+                      <SelectItem key={client.id} value={client.id} className="text-xs font-medium focus:bg-muted focus:text-foreground pl-4 text-muted-foreground italic">
+                        📁 {client.name} (Inactivo)
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+              </>
+            );
+          })()}
         </SelectContent>
       </Select>
 

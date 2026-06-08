@@ -654,7 +654,9 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                   onValueChange={v => setNewUser({...newUser, assignedClientId: v})}
                 >
                   <SelectTrigger className="bg-muted border-border">
-                    <SelectValue placeholder="Seleccionar cliente" />
+                    <SelectValue placeholder="Seleccionar cliente">
+                      {clients.find(c => c.id === newUser.assignedClientId)?.name || "Seleccionar cliente"}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                   {clients.filter(c => currentProfile?.role === 'director' || currentProfile?.role === 'commercial' || c.accountManagerId === currentProfile?.uid).map(c => (

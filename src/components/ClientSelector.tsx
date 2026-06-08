@@ -140,9 +140,11 @@ export default function ClientSelector({ selectedClientId, onClientChange, isDem
     <div className="flex items-center gap-2">
       <Select value={selectedClientId} onValueChange={onClientChange}>
         <SelectTrigger className="w-[200px] h-9 bg-muted border-border shadow-none font-bold text-xs text-foreground">
-          <div className="flex items-center gap-2">
-            <Briefcase size={14} className="text-primary" />
-            <SelectValue placeholder="Seleccionar Cliente" />
+          <div className="flex items-center gap-2 max-w-[170px]">
+            <Briefcase size={14} className="text-primary shrink-0" />
+            <SelectValue placeholder="Seleccionar Cliente">
+              {clients.find(c => c.id === selectedClientId)?.name || (selectedClientId ? "Cargando..." : "Seleccionar Cliente")}
+            </SelectValue>
           </div>
         </SelectTrigger>
         <SelectContent className="bg-popover border-border">

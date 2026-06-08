@@ -460,11 +460,11 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
         name: newClientName,
         status: newClientStatus,
         accountManagerId: selectedAMForNewClient,
-        setterId: selectedSetterForNewClient || undefined,
-        sharedAccountManagerIds: selectedSharedAMsForNewClient.length > 0 ? selectedSharedAMsForNewClient : undefined,
-        availableTags: tags.length > 0 ? tags : undefined,
-        contractStartDate: newClientStartDate || undefined,
-        contractEndDate: newClientEndDate || undefined,
+        setterId: selectedSetterForNewClient || null,
+        sharedAccountManagerIds: selectedSharedAMsForNewClient,
+        availableTags: tags,
+        contractStartDate: newClientStartDate || null,
+        contractEndDate: newClientEndDate || null,
         createdAt: new Date().toISOString(),
       };
 
@@ -502,10 +502,10 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
       const progress = calculateProgress(editingClient.contractStartDate, editingClient.contractEndDate);
       const updatedClient = {
         ...editingClient,
-        availableTags: tags.length > 0 ? tags : undefined,
+        availableTags: tags,
         accountManagerId: selectedAMForNewClient,
-        setterId: selectedSetterForNewClient || undefined,
-        sharedAccountManagerIds: selectedSharedAMsForNewClient.length > 0 ? selectedSharedAMsForNewClient : undefined,
+        setterId: selectedSetterForNewClient || null,
+        sharedAccountManagerIds: selectedSharedAMsForNewClient,
         progress: progress,
       };
 

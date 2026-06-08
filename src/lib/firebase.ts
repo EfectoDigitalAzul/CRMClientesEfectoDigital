@@ -1,6 +1,6 @@
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, createUserWithEmailAndPassword } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, getDoc, updateDoc, addDoc, query, where, onSnapshot, orderBy, Timestamp } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, collection, doc, setDoc, getDoc, updateDoc, addDoc, query, where, onSnapshot, orderBy, Timestamp } from 'firebase/firestore';
 
 // Placeholder config - will be replaced by firebase-applet-config.json if it exists
 const firebaseConfig = {
@@ -21,7 +21,7 @@ export const isFirebaseConfigured = config && config.apiKey && config.apiKey !==
 // Initialize with safe fallback if not configured
 const app = initializeApp(isFirebaseConfigured ? config : { ...firebaseConfig, apiKey: "dummy-key-for-init" });
 export const auth = getAuth(app);
-export const db = getFirestore(app, (config as any).firestoreDatabaseId);
+export const db = initializeFirestore(app, { ignoreUndefinedProperties: true }, (config as any).firestoreDatabaseId);
 export const googleProvider = new GoogleAuthProvider();
 
 export const loginWithGoogle = () => signInWithPopup(auth, googleProvider);

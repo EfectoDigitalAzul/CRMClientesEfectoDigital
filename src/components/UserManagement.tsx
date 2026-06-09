@@ -179,6 +179,10 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
       toast.error("El personal de equipo debe usar correo @efectodigital.com.ar o @efectodigital.com");
       return;
     }
+    const emailRegex = /^[^s@]+@[^s@]+.[^s@]+$/;
+    if (newUser.email && !emailRegex.test(newUser.email.trim())) { toast.error("El formato del email no es válido"); return; }
+    if (newUser.displayName.trim().length > 100) { toast.error("El nombre no puede superar los 100 caracteres"); return; }
+    if (newUser.email.trim().length > 100) { toast.error("El email no puede superar los 100 caracteres"); return; }
     const lowerUsername = newUser.username.trim().toLowerCase();
     const lowerEmail = newUser.email.trim().toLowerCase();
     if (newUser.role === 'client' && (!lowerUsername || !newUser.password)) {
@@ -262,6 +266,9 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
       toast.error("El personal de equipo debe usar correo @efectodigital.com.ar o @efectodigital.com");
       return;
     }
+    const emailRegexEdit = /^[^s@]+@[^s@]+.[^s@]+$/;
+    if (editingUser.email && !emailRegexEdit.test(editingUser.email.trim())) { toast.error("El formato del email no es válido"); return; }
+    if ((editingUser.displayName?.trim().length || 0) > 100) { toast.error("El nombre no puede superar los 100 caracteres"); return; }
     setLoading(true);
     try {
       const updatedUser: any = {
@@ -611,6 +618,7 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
               <Input 
                 id="username" 
                 placeholder="ej: naza_efecto" 
+                maxLength={50}
                 value={newUser.username}
                 onChange={e => setNewUser({...newUser, username: e.target.value})}
                 className="bg-muted border-border"
@@ -621,6 +629,7 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
               <Input 
                 id="pass" 
                 placeholder="Asigna una contraseña" 
+                maxLength={128}
                 value={newUser.password}
                 onChange={e => setNewUser({...newUser, password: e.target.value})}
                 className="bg-muted border-border"
@@ -632,6 +641,7 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                 <Input 
                   id="email" 
                   placeholder="ejemplo@efectodigital.com.ar" 
+                  maxLength={100}
                   value={newUser.email}
                   onChange={e => setNewUser({...newUser, email: e.target.value})}
                   className="bg-muted border-border"
@@ -643,6 +653,7 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
               <Input 
                 id="name" 
                 placeholder="Ej: Mariana Rodríguez" 
+                maxLength={100}
                 value={newUser.displayName}
                 onChange={e => setNewUser({...newUser, displayName: e.target.value})}
                 className="bg-muted border-border"
@@ -703,6 +714,7 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                 <Label htmlFor="edit-name" className="text-xs uppercase font-bold text-muted-foreground">Nombre / Empresa</Label>
                 <Input 
                   id="edit-name" 
+                  maxLength={100}
                   value={editingUser.displayName}
                   onChange={e => setEditingUser({...editingUser, displayName: e.target.value})}
                   className="bg-muted border-border"
@@ -713,6 +725,7 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                 <Label htmlFor="edit-user" className="text-xs uppercase font-bold text-muted-foreground">Usuario (Login)</Label>
                 <Input 
                   id="edit-user" 
+                  maxLength={50}
                   value={editingUser.username || ''}
                   onChange={e => setEditingUser({...editingUser, username: e.target.value})}
                   className="bg-muted border-border"
@@ -722,6 +735,7 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                 <Label htmlFor="edit-pass" className="text-xs uppercase font-bold text-muted-foreground">Contraseña</Label>
                 <Input 
                   id="edit-pass" 
+                  maxLength={128}
                   value={editingUser.password || ''}
                   onChange={e => setEditingUser({...editingUser, password: e.target.value})}
                   className="bg-muted border-border"
@@ -733,6 +747,7 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                   <Label htmlFor="edit-email" className="text-xs uppercase font-bold text-muted-foreground">Email</Label>
                   <Input 
                     id="edit-email" 
+                    maxLength={100}
                     value={editingUser.email}
                     onChange={e => setEditingUser({...editingUser, email: e.target.value})}
                     className="bg-muted border-border"

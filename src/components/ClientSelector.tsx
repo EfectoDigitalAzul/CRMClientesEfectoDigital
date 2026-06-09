@@ -107,6 +107,7 @@ export default function ClientSelector({ selectedClientId, onClientChange, isDem
 
   const handleCreateClient = async () => {
     if (!newClientName.trim()) return;
+      if (newClientName.trim().length > 100) { toast.error("El nombre del cliente no puede superar los 100 caracteres"); return; }
     setLoading(true);
     try {
       const newClient = {

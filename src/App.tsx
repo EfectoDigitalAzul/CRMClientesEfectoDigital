@@ -558,9 +558,6 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        const providerId = currentUser.providerData[0]?.providerId ?? 'password';
-        const isGoogleLogin = providerId === 'google.com';
-
         const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
         let resolvedProfile: UserProfile | null = null;
 
@@ -615,21 +612,6 @@ export default function App() {
         }
 
         if (resolvedProfile) {
-          const isClientRole = resolvedProfile.role === 'client';
-
-          if (isGoogleLogin && isClientRole) {
-            toast.error('Los clientes deben ingresar con su email y contraseña, no con Google.');
-            await logout();
-            setLoading(false);
-            return;
-          }
-          if (!isGoogleLogin && !isClientRole) {
-            toast.error('Los empleados deben ingresar con su cuenta de Google corporativa.');
-            await logout();
-            setLoading(false);
-            return;
-          }
-
           setPendingActivation(false);
           setProfile(resolvedProfile);
         }
@@ -814,11 +796,6 @@ export default function App() {
       }
 
       if (foundProfile) {
-        if (foundProfile.role !== 'client') {
-          toast.error("Los empleados deben ingresar con su cuenta de Google corporativa.");
-          setIsLoggingIn(false);
-          return;
-        }
         if (!foundProfile.isActive) {
           toast.error("Tu cuenta está bloqueada");
         } else {
@@ -860,9 +837,7 @@ export default function App() {
         const querySnap = await getDocs(q);
         if (!querySnap.empty) {
           const data = { uid: querySnap.docs[0].id, ...querySnap.docs[0].data() } as UserProfile;
-          if (data.role !== 'client') {
-            toast.error("Los empleados deben ingresar con su cuenta de Google corporativa.");
-          } else if (data.isActive) {
+          if (data.isActive) {
             // Sincronizar con Firebase Auth para este caso también
             if (data.email && data.password) {
               try {
@@ -926,47 +901,12 @@ export default function App() {
 
           <div className="bg-white/5 border border-white/10 rounded-3xl p-2 backdrop-blur-xl shadow-2xl">
             <div className="space-y-5 p-4 sm:p-6 animate-in fade-in slide-in-from-top-4 duration-500">
-
-              {/* Empleados: Google Workspace */}
-              <div className="space-y-3">
-                <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground/60 text-center">Empleados</p>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      await loginWithGoogle();
-                    } catch (error: any) {
-                      if (error.code !== 'auth/popup-closed-by-user') {
-                        toast.error("Error al iniciar sesión con Google");
-                      }
-                    }
-                  }}
-                  className="w-full h-12 flex items-center justify-center gap-3 bg-white/10 hover:bg-white/15 border border-white/20 rounded-xl font-bold text-sm text-white transition-all active:scale-[0.98]"
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24">
-                    <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                    <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                    <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.28.81-.56z" />
-                    <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                  </svg>
-                  Ingresar con Google Workspace
-                </button>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-white/10"></div>
-                <span className="text-[9px] uppercase tracking-widest text-muted-foreground/40 font-bold">o</span>
-                <div className="flex-1 h-px bg-white/10"></div>
-              </div>
-
-              {/* Clientes: email y contraseña */}
               <form onSubmit={(e) => { e.preventDefault(); handleCredentialLogin(e); }} className="space-y-4">
-                <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground/60 text-center">Clientes</p>
                 <div className="space-y-2">
-                  <Label className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground/80 ml-1">Email</Label>
+                  <Label className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground/80 ml-1">Email / Usuario</Label>
                   <div className="relative group">
                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground/50 group-focus-within:text-primary transition-colors">
-                      <Mail size={18} />
+                      <UserIcon size={18} />
                     </div>
                     <input
                       type="text"
@@ -997,9 +937,37 @@ export default function App() {
                   className="w-full h-12 font-black bg-primary text-black hover:bg-primary/90 rounded-xl shadow-[0_0_30px_rgba(var(--primary),0.2)] transition-all active:scale-[0.98]"
                   disabled={isLoggingIn}
                 >
-                  {isLoggingIn ? 'AUTENTICANDO...' : 'INGRESAR'}
+                  {isLoggingIn ? 'AUTENTICANDO...' : 'INGRESAR AL PANEL'}
                 </Button>
               </form>
+
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-white/10"></div>
+                <span className="text-[9px] uppercase tracking-widest text-muted-foreground/40 font-bold">o</span>
+                <div className="flex-1 h-px bg-white/10"></div>
+              </div>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await loginWithGoogle();
+                  } catch (error: any) {
+                    if (error.code !== 'auth/popup-closed-by-user') {
+                      toast.error("Error al iniciar sesión con Google");
+                    }
+                  }
+                }}
+                className="w-full h-12 flex items-center justify-center gap-3 bg-white/10 hover:bg-white/15 border border-white/20 rounded-xl font-bold text-sm text-white transition-all active:scale-[0.98]"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24">
+                  <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.28.81-.56z" />
+                  <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                </svg>
+                Ingresar con Google Workspace
+              </button>
             </div>
           </div>
           

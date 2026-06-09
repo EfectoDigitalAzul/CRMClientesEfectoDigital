@@ -174,7 +174,7 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
   };
 
   const handleHandleAddUser = async () => {
-    if (newUser.role !== 'client' && newUser.role !== 'director' && !newUser.email.endsWith('@efectodigital.com.ar') && !newUser.email.endsWith('@efectodigital.com')) {
+    if (newUser.role !== 'client' && !newUser.email.endsWith('@efectodigital.com.ar') && !newUser.email.endsWith('@efectodigital.com')) {
       toast.error("El personal de equipo debe usar correo @efectodigital.com.ar o @efectodigital.com");
       return;
     }
@@ -256,7 +256,7 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
 
   const handleUpdateUser = async () => {
     if (!editingUser) return;
-    if (editingUser.role !== 'client' && editingUser.role !== 'director' && !editingUser.email.endsWith('@efectodigital.com.ar') && !editingUser.email.endsWith('@efectodigital.com')) {
+    if (editingUser.role !== 'client' && !editingUser.email.endsWith('@efectodigital.com.ar') && !editingUser.email.endsWith('@efectodigital.com')) {
       toast.error("El personal de equipo debe usar correo @efectodigital.com.ar o @efectodigital.com");
       return;
     }

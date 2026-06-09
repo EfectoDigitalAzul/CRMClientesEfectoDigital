@@ -53,7 +53,8 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
     password: '',
     displayName: '',
     role: 'client' as UserRole,
-    assignedClientId: ''
+    assignedClientId: '',
+    hideFromTeam: false
   });
   const [loading, setLoading] = useState(false);
 
@@ -174,7 +175,7 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
   };
 
   const handleHandleAddUser = async () => {
-    if (newUser.role !== 'client' && !newUser.email.endsWith('@efectodigital.com.ar') && !newUser.email.endsWith('@efectodigital.com')) {
+    if (newUser.role !== 'client' && newUser.role !== 'director' && !newUser.email.endsWith('@efectodigital.com.ar') && !newUser.email.endsWith('@efectodigital.com')) {
       toast.error("El personal de equipo debe usar correo @efectodigital.com.ar o @efectodigital.com");
       return;
     }
@@ -221,7 +222,8 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
         displayName: newUser.displayName,
         role: newUser.role,
         isActive: true,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        hideFromTeam: newUser.hideFromTeam || false
       };
 
       if (newUser.role === 'client' && newUser.assignedClientId) {
@@ -245,7 +247,7 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
       
       toast.success("Perfil de acceso creado correctamente");
       setIsAddUserOpen(false);
-      setNewUser({ email: '', username: '', password: '', displayName: '', role: 'client', assignedClientId: '' });
+      setNewUser({ email: '', username: '', password: '', displayName: '', role: 'client', assignedClientId: '', hideFromTeam: false });
     } catch (error: any) {
       console.error("[CrearUsuario] ERROR CRÍTICO AL CREAR PERFIL:", error);
       toast.error(`Error al crear perfil: ${error.message || error}`);
@@ -256,7 +258,7 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
 
   const handleUpdateUser = async () => {
     if (!editingUser) return;
-    if (editingUser.role !== 'client' && !editingUser.email.endsWith('@efectodigital.com.ar') && !editingUser.email.endsWith('@efectodigital.com')) {
+    if (editingUser.role !== 'client' && editingUser.role !== 'director' && !editingUser.email.endsWith('@efectodigital.com.ar') && !editingUser.email.endsWith('@efectodigital.com')) {
       toast.error("El personal de equipo debe usar correo @efectodigital.com.ar o @efectodigital.com");
       return;
     }
@@ -646,6 +648,20 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                 className="bg-muted border-border"
               />
             </div>
+            {newUser.role !== 'client' && (
+              <div className="flex items-center gap-2 mt-1 py-1">
+                <input
+                  type="checkbox"
+                  id="hideFromTeam"
+                  className="h-4 w-4 bg-muted border-border cursor-pointer focus:ring-primary text-primary rounded accent-primary border"
+                  checked={newUser.hideFromTeam || false}
+                  onChange={e => setNewUser({...newUser, hideFromTeam: e.target.checked})}
+                />
+                <Label htmlFor="hideFromTeam" className="text-xs font-bold text-foreground cursor-pointer select-none">
+                  Ocultar de Equipo y Rendimiento (Rol de apoyo u otros)
+                </Label>
+              </div>
+            )}
             {newUser.role === 'client' && (
               <div className="grid gap-2">
                 <Label className="text-xs uppercase font-bold text-muted-foreground">Asignar Proyecto</Label>
@@ -747,6 +763,20 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                   </SelectContent>
                 </Select>
               </div>
+              {editingUser.role !== 'client' && (
+                <div className="flex items-center gap-2 mt-1 py-1">
+                  <input
+                    type="checkbox"
+                    id="edit-hideFromTeam"
+                    className="h-4 w-4 bg-muted border-border cursor-pointer focus:ring-primary text-primary rounded accent-primary border"
+                    checked={editingUser.hideFromTeam || false}
+                    onChange={e => setEditingUser({...editingUser, hideFromTeam: e.target.checked})}
+                  />
+                  <Label htmlFor="edit-hideFromTeam" className="text-xs font-bold text-foreground cursor-pointer select-none border-none">
+                    Ocultar de Equipo y Rendimiento (Rol de apoyo u otros)
+                  </Label>
+                </div>
+              )}
             </div>
           )}
           <DialogFooter>

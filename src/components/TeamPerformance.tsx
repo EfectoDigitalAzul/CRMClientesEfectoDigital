@@ -499,9 +499,11 @@ export default function TeamPerformance({ isDemoMode, profile, onClientSelect, o
   };
 
   const filteredMembers = teamMembers.filter(m => 
-    m.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    m.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (m.role || '').toLowerCase().includes(searchTerm.toLowerCase().replace(' ', '_'))
+    !m.hideFromTeam && (
+      m.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      m.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (m.role || '').toLowerCase().includes(searchTerm.toLowerCase().replace(' ', '_'))
+    )
   );
 
   const leaderboard = useMemo(() => {

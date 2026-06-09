@@ -833,7 +833,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
           Estructura del Equipo
         </h3>
         <div className="grid gap-4">
-        {teamMembers.map((member) => {
+        {teamMembers.filter(m => !m.hideFromTeam).map((member) => {
           const amClients = clients.filter(c => c.accountManagerId === member.uid);
           const setterClients = clients.filter(c => c.setterId === member.uid);
           const isExpanded = expandedMember === member.uid;

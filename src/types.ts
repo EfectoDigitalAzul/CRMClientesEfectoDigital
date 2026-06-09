@@ -11,6 +11,7 @@ export interface UserProfile {
   assignedClientId?: string; // For 'client' role users
   isActive: boolean;
   createdAt: string;
+  hideFromTeam?: boolean; // Toggles visibility in team performance & team list views
 }
 
 export type LeadStatus = 'new' | 'contacted' | 'follow-up' | 'meeting-scheduled' | 'closed-won' | 'closed-lost' | 'reschedule' | 'qualified' | 'not-interested' | 'future';

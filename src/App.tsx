@@ -69,7 +69,6 @@ export default function App() {
   const [credentials, setCredentials] = useState({ username: '', password: '' });
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [loginTab, setLoginTab] = useState<string>('credentials');
-  const [pendingActivation, setPendingActivation] = useState(false);
 
   const [selectedLeadForDetail, setSelectedLeadForDetail] = useState<Lead | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
@@ -613,11 +612,19 @@ export default function App() {
 
             setProfile(newProfile);
           } else {
-            // No pre-created profile found — block access and show pending activation screen
-            await logout();
-            setPendingActivation(true);
-            setLoading(false);
-            return;
+            const isStaffEmail = lowerEmail?.endsWith('@efectodigital.com.ar') || lowerEmail?.endsWith('@efectodigital.com');
+            const isAdminEmail = lowerEmail === 'azul@efectodigital.com.ar' || lowerEmail === 'nazareno@efectodigital.com.ar' || lowerEmail === 'mariana@efectodigital.com' || lowerEmail === 'mariana@efectodigital.com.ar' || lowerEmail === 'azul@efectodigital.com';
+            const newProfile: UserProfile = {
+              uid: currentUser.uid,
+              email: lowerEmail || '',
+              displayName: currentUser.displayName || 'User',
+              role: isAdminEmail ? 'director' : (isStaffEmail ? 'account_manager' : 'setter'), 
+              isActive: true,
+              photoURL: currentUser.photoURL || undefined,
+              createdAt: new Date().toISOString(),
+            };
+            await setDoc(doc(db, 'users', currentUser.uid), newProfile);
+            setProfile(newProfile);
           }
         }
       } else {
@@ -641,11 +648,9 @@ export default function App() {
     }
   }, [profile]);
 
+  // Clients can always view their leads page now, so redirect is not needed regardless of setter status
   useEffect(() => {
-    const clientHasSetter = selectedClient ? (!!selectedClient.setterId && selectedClient.setterId.trim() !== '') : false;
-    if (profile?.role === 'client' && clientHasSetter && activeTab === 'leads') {
-      setActiveTab('dashboard');
-    }
+    // No redirect needed for clients here
   }, [profile, selectedClient, activeTab]);
 
   const handleNotificationClick = (n: any) => {
@@ -723,23 +728,6 @@ export default function App() {
         </p>
         <Button onClick={handleLogout} variant="outline" className="font-bold border-2">
           Cerrar Sesión
-        </Button>
-      </div>
-    );
-  }
-
-  if (pendingActivation) {
-    return (
-      <div className="flex h-screen w-screen flex-col items-center justify-center bg-background p-4 text-center">
-        <div className="h-20 w-20 bg-yellow-500/10 rounded-full flex items-center justify-center mb-6 border border-yellow-500/20 shadow-lg">
-          <AlertCircle size={40} className="text-yellow-500" />
-        </div>
-        <h1 className="text-2xl font-black text-foreground mb-2">CUENTA NO HABILITADA</h1>
-        <p className="text-muted-foreground max-w-md mx-auto mb-8 font-medium">
-          Tu cuenta aún no fue habilitada en el sistema. Contactá a tu director o administrador de Efecto Digital para que active tu acceso.
-        </p>
-        <Button onClick={() => { handleLogout(); setPendingActivation(false); }} variant="outline" className="font-bold border-2">
-          Volver al Inicio
         </Button>
       </div>
     );
@@ -988,7 +976,7 @@ export default function App() {
   }
 
   const clientHasSetter = selectedClient ? (!!selectedClient.setterId && selectedClient.setterId.trim() !== '') : false;
-  const showLeadsSection = profile?.role !== 'client' || !clientHasSetter;
+  const showLeadsSection = true;
   const isStaff = profile?.role !== 'client' && (profile?.role === 'director' || profile?.role === 'setter' || profile?.role === 'account_manager' || profile?.role === 'commercial');
 
   const getContractStatusAlert = () => {
@@ -1474,7 +1462,7 @@ export default function App() {
               </PopoverContent>
             </Popover>
             
-            {(isStaff || (profile?.role === 'client' && !clientHasSetter)) && (
+            {isStaff && (
               <Button onClick={() => setIsLeadFormOpen(true)} className="gap-2 font-semibold">
                 <Plus size={18} />
                 <span>Nuevo Lead</span>

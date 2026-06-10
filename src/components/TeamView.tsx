@@ -160,6 +160,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
   const [teamMembers, setTeamMembers] = useState<UserProfile[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [expandedMember, setExpandedMember] = useState<string | null>(null);
+  const [showHistorical, setShowHistorical] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [isNewClientOpen, setIsNewClientOpen] = useState(false);
   const [isNewMemberOpen, setIsNewMemberOpen] = useState(false);
@@ -286,6 +287,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
         setExpandedMember(profile.uid);
       }
     }, (error) => {
+      setLoading(false);
       handleFirestoreError(error, OperationType.LIST, 'users');
     });
 
@@ -303,6 +305,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
       setClients(filtered);
       setLoading(false);
     }, (error) => {
+      setLoading(false);
       handleFirestoreError(error, OperationType.LIST, 'clients');
     });
 
@@ -332,6 +335,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
         setHistoryNotes(snap.docs.map(d => ({ id: d.id, ...d.data() } as ClientHistoryNote)));
         setLoadingHistory(false);
       }, (error) => {
+        setLoadingHistory(false);
         handleFirestoreError(error, OperationType.LIST, `clients/${editingClient.id}/historyNotes`);
       });
       return () => unsub();
@@ -802,6 +806,195 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
     debouncedUpdateNote(clientId, note, clients, !!isDemoMode);
   };
 
+  const renderClientRow = (client: Client, member: UserProfile) => {
+    const isAM = client.accountManagerId === member.uid;
+    const isSetter = client.setterId === member.uid;
+    const isAuthorized = profile?.role === 'director' || 
+                         client.accountManagerId === profile?.uid || 
+                         client.setterId === profile?.uid || 
+                         (client.sharedAccountManagerIds && client.sharedAccountManagerIds.includes(profile?.uid || ''));
+                         
+    return (
+      <div key={client.id} className="flex flex-col md:flex-row md:items-center justify-between p-4 hover:bg-muted/10 transition-colors group gap-4 md:gap-0">
+        <div className="flex items-center gap-3 min-w-[200px]">
+          <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center text-muted-foreground">
+            <Briefcase size={16} />
+          </div>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-sm text-foreground">{client.name}</span>
+              <Select 
+                value={client.status || 'onboarding'} 
+                onValueChange={(v) => handleUpdateClientStatus(client.id, v as ClientStatus)}
+                disabled={!isAuthorized}
+              >
+                <SelectTrigger className={cn("h-5 min-w-[90px] px-2 text-[9px] font-black uppercase tracking-widest border-none shadow-none focus:ring-0", getClientStatusBadgeColor(client.status || 'onboarding'))}>
+                  <SelectValue placeholder="Estado" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover border-border min-w-[120px]">
+                  {(['onboarding', 'active', 'paused', 'completed', 'cancelled'] as ClientStatus[]).map(s => (
+                    <SelectItem key={s} value={s} className="text-[10px] font-bold uppercase tracking-wider">
+                      {getClientStatusLabel(s)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-3 mt-0.5">
+              <div className="flex gap-2">
+                {isAM && <span className="text-[9px] bg-secondary text-primary border border-primary/30 px-1.5 py-0.5 rounded font-bold uppercase tracking-tight">AM</span>}
+                {isSetter && <span className="text-[9px] bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800 px-1.5 py-0.5 rounded font-bold uppercase tracking-tight">Setter</span>}
+              </div>
+              {client.planName && (
+                <span className="text-[10px] text-muted-foreground font-semibold flex items-center gap-1">
+                  <Briefcase size={10} />
+                  {client.planName}
+                </span>
+              )}
+              <div className="flex items-center gap-1.5 min-w-[60px]">
+                <div className="flex-1 bg-muted rounded-full h-1 w-12 overflow-hidden border border-border/30">
+                  <div className="bg-primary h-full rounded-full" style={{ width: `${calculateProgress(client.contractStartDate, client.contractEndDate)}%` }} />
+                </div>
+                <span className="text-[9px] font-bold text-muted-foreground line-clamp-1">{calculateProgress(client.contractStartDate, client.contractEndDate)}%</span>
+              </div>
+              <div className="hidden lg:flex items-center gap-2 text-[9px] font-bold text-muted-foreground/50 border-l border-border/50 pl-3">
+                <span>{client.contractStartDate ? formatDate(client.contractStartDate) : '--/--/----'}</span>
+                <span>-</span>
+                <span>{client.contractEndDate ? formatDate(client.contractEndDate) : '--/--/----'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex-1 min-w-[200px] max-w-[400px] mx-4 my-2 sm:my-0">
+          <div className="relative group/note bg-secondary/30 dark:bg-muted/10 border border-border/50 rounded-lg p-2 transition-all hover:border-primary/30 group-focus-within/note:border-primary/50 shadow-sm">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <StickyNote size={12} className="text-primary flex-shrink-0" />
+                <span className="text-[10px] font-black uppercase text-primary tracking-widest leading-none">Nota de Seguimiento</span>
+              </div>
+              {savingNotes[client.id] && (
+                <span className="text-[8px] font-bold text-muted-foreground animate-pulse uppercase">Guardando...</span>
+              )}
+            </div>
+            <textarea 
+              className="w-full min-h-[36px] max-h-[80px] text-[11px] bg-transparent border-none focus:ring-0 font-bold italic placeholder:text-muted-foreground/20 p-0 shadow-none text-foreground outline-none resize-none scrollbar-hide"
+              placeholder={isAuthorized ? "Escribe algo importante sobre este cliente..." : "Acceso restringido para editar notas"}
+              rows={1}
+              value={client.notes || ''}
+              disabled={!isAuthorized}
+              onChange={(e) => handleInlineNoteChange(client.id, e.target.value)}
+              onInput={(e) => {
+                const target = e.target as HTMLTextAreaElement;
+                target.style.height = 'auto';
+                target.style.height = `${target.scrollHeight}px`;
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1 opacity-100 transition-opacity justify-end">
+          {!isAuthorized ? (
+            <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-tight text-muted-foreground/60 gap-1.5 bg-muted/20 border-border/50 py-1.5 px-3">
+              <Lock size={11} className="text-muted-foreground/50" />
+              Acceso Privado (Asignado)
+            </Badge>
+          ) : (
+            <>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                title="Panel de Control"
+                type="button"
+                className="h-8 gap-2 text-[10px] font-black uppercase text-muted-foreground hover:text-primary hover:bg-secondary/50 border border-transparent hover:border-primary/20"
+                onClick={() => handleClientClick(client.id)}
+              >
+                <LayoutDashboard size={14} className="text-muted-foreground/60" />
+                Escritorio
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                title="Ver Leads"
+                type="button"
+                className="h-8 gap-2 text-[10px] font-black uppercase text-muted-foreground hover:text-primary hover:bg-secondary/50 border border-transparent hover:border-primary/20"
+                onClick={() => {
+                  onClientSelect(client.id);
+                  onTabChange('leads');
+                }}
+              >
+                <UsersIcon size={14} className="text-muted-foreground/60" />
+                Leads
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                title="Cronograma"
+                type="button"
+                className="h-8 gap-2 text-[10px] font-black uppercase text-muted-foreground hover:text-primary hover:bg-secondary/50 border border-transparent hover:border-primary/20"
+                onClick={() => {
+                  onClientSelect(client.id);
+                  onTabChange('meetings');
+                }}
+              >
+                <Calendar size={14} className="text-muted-foreground/60" />
+                Agenda
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                title="Informes de Rendimiento"
+                type="button"
+                className="h-8 gap-2 text-[10px] font-black uppercase text-muted-foreground hover:text-primary hover:bg-secondary/50 border border-transparent hover:border-primary/20"
+                onClick={() => {
+                  onClientSelect(client.id);
+                  onTabChange('reports');
+                }}
+              >
+                <BarChart3 size={14} className="text-muted-foreground/60" />
+                Informes
+              </Button>
+            </>
+          )}
+          
+          {(profile?.role === 'director' || profile?.role === 'commercial' || isAuthorized) && (
+            <>
+              <div className="h-4 w-px bg-border/40 mx-1" />
+
+              <Button 
+                variant="outline" 
+                size="sm" 
+                type="button"
+                className="h-8 px-3 gap-2 text-[10px] font-black uppercase text-primary border-primary/20 hover:bg-primary hover:text-white transition-all shadow-sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleEditClient(client);
+                }}
+              >
+                <Zap size={13} fill="currentColor" /> 
+                Ficha
+              </Button>
+              {(profile?.role === 'director' || (profile?.role === 'account_manager' && client.accountManagerId === profile.uid)) && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  type="button"
+                  className="h-8 w-8 p-0 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteClient(client.id, client.name);
+                  }}
+                >
+                  <Trash2 size={14} />
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const isManagementRole = profile?.role === 'director' || profile?.role === 'account_manager' || profile?.role === 'setter' || profile?.role === 'commercial';
 
   return (
@@ -871,196 +1064,55 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
 
               {isExpanded && (
                 <CardContent className="p-0 bg-transparent">
-                  {(amClients.length === 0 && setterClients.length === 0) ? (
-                    <div className="p-8 text-center text-xs text-muted-foreground italic">
-                      No hay clientes asignados a este miembro
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-border/50">
-                      {[...amClients, ...setterClients].filter((c, i, self) => self.findIndex(t => t.id === c.id) === i).map((client) => {
-                        const isAM = client.accountManagerId === member.uid;
-                        const isSetter = client.setterId === member.uid;
-                        const isAuthorized = profile?.role === 'director' || 
-                                             client.accountManagerId === profile?.uid || 
-                                             client.setterId === profile?.uid || 
-                                             (client.sharedAccountManagerIds && client.sharedAccountManagerIds.includes(profile?.uid || ''));
-                        
-                        return (
-                          <div key={client.id} className="flex flex-col md:flex-row md:items-center justify-between p-4 hover:bg-muted/10 transition-colors group gap-4 md:gap-0">
-                            <div className="flex items-center gap-3 min-w-[200px]">
-                              <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center text-muted-foreground">
-                                <Briefcase size={16} />
-                              </div>
-                              <div className="flex flex-col">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-bold text-sm text-foreground">{client.name}</span>
-                                  <Select 
-                                    value={client.status || 'onboarding'} 
-                                    onValueChange={(v) => handleUpdateClientStatus(client.id, v as ClientStatus)}
-                                    disabled={!isAuthorized}
-                                  >
-                                    <SelectTrigger className={cn("h-5 min-w-[90px] px-2 text-[9px] font-black uppercase tracking-widest border-none shadow-none focus:ring-0", getClientStatusBadgeColor(client.status || 'onboarding'))}>
-                                      <SelectValue placeholder="Estado" />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-popover border-border min-w-[120px]">
-                                      {(['onboarding', 'active', 'paused', 'completed', 'cancelled'] as ClientStatus[]).map(s => (
-                                        <SelectItem key={s} value={s} className="text-[10px] font-bold uppercase tracking-wider">
-                                          {getClientStatusLabel(s)}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                <div className="flex items-center gap-3 mt-0.5">
-                                  <div className="flex gap-2">
-                                    {isAM && <span className="text-[9px] bg-secondary text-primary border border-primary/30 px-1.5 py-0.5 rounded font-bold uppercase tracking-tight">AM</span>}
-                                    {isSetter && <span className="text-[9px] bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800 px-1.5 py-0.5 rounded font-bold uppercase tracking-tight">Setter</span>}
-                                  </div>
-                                  {client.planName && (
-                                    <span className="text-[10px] text-muted-foreground font-semibold flex items-center gap-1">
-                                      <Briefcase size={10} />
-                                      {client.planName}
-                                    </span>
-                                  )}
-                                  <div className="flex items-center gap-1.5 min-w-[60px]">
-                                    <div className="flex-1 bg-muted rounded-full h-1 w-12 overflow-hidden border border-border/30">
-                                      <div className="bg-primary h-full rounded-full" style={{ width: `${calculateProgress(client.contractStartDate, client.contractEndDate)}%` }} />
-                                    </div>
-                                    <span className="text-[9px] font-bold text-muted-foreground line-clamp-1">{calculateProgress(client.contractStartDate, client.contractEndDate)}%</span>
-                                  </div>
-                                  <div className="hidden lg:flex items-center gap-2 text-[9px] font-bold text-muted-foreground/50 border-l border-border/50 pl-3">
-                                    <span>{client.contractStartDate ? formatDate(client.contractStartDate) : '--/--/----'}</span>
-                                    <span>-</span>
-                                    <span>{client.contractEndDate ? formatDate(client.contractEndDate) : '--/--/----'}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                            
-                            <div className="flex-1 min-w-[200px] max-w-[400px] mx-4 my-2 sm:my-0">
-                              <div className="relative group/note bg-secondary/30 dark:bg-muted/10 border border-border/50 rounded-lg p-2 transition-all hover:border-primary/30 group-focus-within/note:border-primary/50 shadow-sm">
-                                <div className="flex items-center justify-between mb-1">
-                                  <div className="flex items-center gap-2">
-                                    <StickyNote size={12} className="text-primary flex-shrink-0" />
-                                    <span className="text-[10px] font-black uppercase text-primary tracking-widest leading-none">Nota de Seguimiento</span>
-                                  </div>
-                                  {savingNotes[client.id] && (
-                                    <span className="text-[8px] font-bold text-muted-foreground animate-pulse uppercase">Guardando...</span>
-                                  )}
-                                </div>
-                                <textarea 
-                                  className="w-full min-h-[36px] max-h-[80px] text-[11px] bg-transparent border-none focus:ring-0 font-bold italic placeholder:text-muted-foreground/20 p-0 shadow-none text-foreground outline-none resize-none scrollbar-hide"
-                                  placeholder={isAuthorized ? "Escribe algo importante sobre este cliente..." : "Acceso restringido para editar notas"}
-                                  rows={1}
-                                  value={client.notes || ''}
-                                  disabled={!isAuthorized}
-                                  onChange={(e) => handleInlineNoteChange(client.id, e.target.value)}
-                                  onInput={(e) => {
-                                    const target = e.target as HTMLTextAreaElement;
-                                    target.style.height = 'auto';
-                                    target.style.height = `${target.scrollHeight}px`;
-                                  }}
-                                />
-                              </div>
-                            </div>
+                  {(() => {
+                    const uniqueClients = [...amClients, ...setterClients].filter((c, i, self) => self.findIndex(t => t.id === c.id) === i);
+                    const activeClients = uniqueClients.filter(c => !c.status || ['onboarding', 'active', 'paused'].includes(c.status));
+                    const historicalClients = uniqueClients.filter(c => c.status && ['completed', 'cancelled'].includes(c.status));
 
-                            <div className="flex flex-wrap items-center gap-1 opacity-100 transition-opacity justify-end">
-                              {!isAuthorized ? (
-                                <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-tight text-muted-foreground/60 gap-1.5 bg-muted/20 border-border/50 py-1.5 px-3">
-                                  <Lock size={11} className="text-muted-foreground/50" />
-                                  Acceso Privado (Asignado)
-                                </Badge>
-                              ) : (
-                                <>
-                                  <Button 
-                                    variant="ghost" 
-                                    size="sm" 
-                                    title="Panel de Control"
-                                    className="h-8 gap-2 text-[10px] font-black uppercase text-muted-foreground hover:text-primary hover:bg-secondary/50 border border-transparent hover:border-primary/20"
-                                    onClick={() => handleClientClick(client.id)}
-                                  >
-                                    <LayoutDashboard size={14} className="text-muted-foreground/60" />
-                                    Escritorio
-                                  </Button>
-                                  <Button 
-                                    variant="ghost" 
-                                    size="sm" 
-                                    title="Ver Leads"
-                                    className="h-8 gap-2 text-[10px] font-black uppercase text-muted-foreground hover:text-primary hover:bg-secondary/50 border border-transparent hover:border-primary/20"
-                                    onClick={() => {
-                                      onClientSelect(client.id);
-                                      onTabChange('leads');
-                                    }}
-                                  >
-                                    <UsersIcon size={14} className="text-muted-foreground/60" />
-                                    Leads
-                                  </Button>
-                                  <Button 
-                                    variant="ghost" 
-                                    size="sm" 
-                                    title="Cronograma"
-                                    className="h-8 gap-2 text-[10px] font-black uppercase text-muted-foreground hover:text-primary hover:bg-secondary/50 border border-transparent hover:border-primary/20"
-                                    onClick={() => {
-                                      onClientSelect(client.id);
-                                      onTabChange('meetings');
-                                    }}
-                                  >
-                                    <Calendar size={14} className="text-muted-foreground/60" />
-                                    Agenda
-                                  </Button>
-                                  <Button 
-                                    variant="ghost" 
-                                    size="sm" 
-                                    title="Informes de Rendimiento"
-                                    className="h-8 gap-2 text-[10px] font-black uppercase text-muted-foreground hover:text-primary hover:bg-secondary/50 border border-transparent hover:border-primary/20"
-                                    onClick={() => {
-                                      onClientSelect(client.id);
-                                      onTabChange('reports');
-                                    }}
-                                  >
-                                    <BarChart3 size={14} className="text-muted-foreground/60" />
-                                    Informes
-                                  </Button>
-                                </>
-                              )}
-                              
-                              {(profile?.role === 'director' || profile?.role === 'commercial' || isAuthorized) && (
-                                <>
-                                  <div className="h-4 w-px bg-border/40 mx-1" />
+                    if (uniqueClients.length === 0) {
+                      return (
+                        <div className="p-8 text-center text-xs text-muted-foreground italic">
+                          No hay clientes asignados a este miembro
+                        </div>
+                      );
+                    }
 
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    className="h-8 px-3 gap-2 text-[10px] font-black uppercase text-primary border-primary/20 hover:bg-primary hover:text-white transition-all shadow-sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleEditClient(client);
-                                    }}
-                                  >
-                                    <Zap size={13} fill="currentColor" /> 
-                                    Ficha
-                                  </Button>
-                                  {(profile?.role === 'director' || (profile?.role === 'account_manager' && client.accountManagerId === profile.uid)) && (
-                                    <Button 
-                                      variant="ghost" 
-                                      size="sm" 
-                                      className="h-8 w-8 p-0 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDeleteClient(client.id, client.name);
-                                      }}
-                                    >
-                                      <Trash2 size={14} />
-                                    </Button>
-                                  )}
-                                </>
-                              )}
-                            </div>
+                    return (
+                      <div className="divide-y divide-border/50">
+                        {/* Active Clients */}
+                        {activeClients.length > 0 ? (
+                          activeClients.map((client) => renderClientRow(client, member))
+                        ) : (
+                          <div className="p-6 text-center text-xs text-muted-foreground italic bg-muted/5">
+                            No hay clientes activos o en onboarding asignados
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                        )}
+
+                        {/* Collapsible Historical Clients */}
+                        {historicalClients.length > 0 && (
+                          <div className="p-4 bg-muted/10 border-t border-border/30">
+                            <div className="flex justify-center">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                type="button"
+                                className="text-[10px] font-black uppercase tracking-wider text-muted-foreground hover:text-primary gap-2 hover:bg-secondary/50 border border-border/20 px-4 py-2 h-auto rounded-xl shadow-xs"
+                                onClick={() => setShowHistorical(prev => ({ ...prev, [member.uid]: !prev[member.uid] }))}
+                              >
+                                {showHistorical[member.uid] ? 'Ocultar' : 'Mostrar'} {historicalClients.length} Clientes Históricos (Finalizados/Cancelados)
+                              </Button>
+                            </div>
+
+                            {showHistorical[member.uid] && (
+                              <div className="mt-4 divide-y divide-border/35 border-t border-border/20">
+                                {historicalClients.map((client) => renderClientRow(client, member))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </CardContent>
               )}
             </Card>

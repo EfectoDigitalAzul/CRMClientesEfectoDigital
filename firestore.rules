@@ -94,14 +94,14 @@ service cloud.firestore {
     match /users/{userId} {
       allow get: if true;
       allow list: if isSignedIn() || (request.query.limit <= 5);
-      allow create: if isDirector() || (isSignedIn() && request.auth.uid == userId && isStaffDomain()) || (
+      allow create: if isDirector() || (isSignedIn() && request.auth.uid == userId && isValidUser(request.resource.data)) || (
         (isAM() || isSetter()) && 
         request.resource.data.role == 'client' && 
         isValidUser(request.resource.data)
       );
       allow update: if isDirector() || (
         isSignedIn() && (
-          request.auth.uid == userId ||
+          (request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])) ||
           ((isAM() || isSetter()) && resource.data.role == 'client')
         )
       );
@@ -115,7 +115,8 @@ service cloud.firestore {
                (isEmailVerified() && userExists() && getUserData().role == 'client' && getUserData().assignedClientId == clientId);
       }
 
-      allow read: if isSignedIn() && canAccessClient(resource.data);
+      allow list: if isSignedIn() && (isStaffMember() || (userExists() && getUserData().role == 'client'));
+      allow get: if isSignedIn() && canAccessClient(resource.data);
       allow create: if isDirector() || isAM();
       allow update: if isDirector() || (isAM() && resource.data.accountManagerId == request.auth.uid);
       allow delete: if isDirector();
@@ -139,15 +140,10 @@ service cloud.firestore {
                (isEmailVerified() && userExists() && getUserData().role == 'client' && getUserData().assignedClientId == leadData.clientId);
       }
 
-      function isClientWithoutSetter(compId) {
-        return hasRole('client') &&
-               getUserData().assignedClientId == compId &&
-               (getClient(compId).setterId == null || getClient(compId).setterId == "");
-      }
-
-      allow read: if isSignedIn() && canAccessLead(resource.data);
-      allow create: if isDirector() || isAM() || isSetter() || (request.resource.data.clientId is string && isClientWithoutSetter(request.resource.data.clientId));
-      allow update: if isDirector() || isAM() || isSetter() || isCommercial() || isClientWithoutSetter(resource.data.clientId);
+      allow list: if isSignedIn() && (isStaffMember() || (userExists() && getUserData().role == 'client'));
+      allow get: if isSignedIn() && canAccessLead(resource.data);
+      allow create: if isDirector() || isAM() || isSetter();
+      allow update: if isDirector() || isAM() || isSetter() || isCommercial();
       allow delete: if isDirector() || (isAM() && getClient(resource.data.clientId).accountManagerId == request.auth.uid);
 
       match /followUps/{followUpId} {

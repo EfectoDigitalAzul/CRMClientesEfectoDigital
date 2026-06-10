@@ -71,7 +71,7 @@ interface LeadDetailsProps {
 
 export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoMode, clientHasSetter }: LeadDetailsProps) {
   const isClientWithoutSetter = profile?.role === 'client' && !clientHasSetter;
-  const canModifyLead = profile?.role !== 'client' || isClientWithoutSetter;
+  const canModifyLead = profile?.role !== 'client';
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [newNote, setNewNote] = useState('');

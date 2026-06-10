@@ -151,7 +151,7 @@ const MOCK_LEADS: Lead[] = [
 export default function LeadList({ profile, isDemoMode, clientId, targetId, onTargetProcessed, onLeadClick, initialViewMode, clientHasSetter }: LeadListProps) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const isClientWithoutSetter = profile?.role === 'client' && !clientHasSetter;
-  const canModifyLeads = profile?.role !== 'client' || isClientWithoutSetter;
+  const canModifyLeads = profile?.role !== 'client';
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [stageFilter, setStageFilter] = useState<string>('all');
@@ -254,7 +254,7 @@ export default function LeadList({ profile, isDemoMode, clientId, targetId, onTa
     // Filter by stage based on role for "real" actionable data
     if (profile?.role === 'setter') return l.stage === 'setter';
     if (profile?.role === 'commercial') return l.stage === 'commercial';
-    if (profile?.role === 'client') return isClientWithoutSetter;
+    if (profile?.role === 'client') return true;
 
     return true;
   }).length;

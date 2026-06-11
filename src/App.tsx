@@ -2028,7 +2028,7 @@ export default function App() {
 
           <div className="space-y-6 pt-2">
             {/* Vista Previa del Avatar */}
-            <div className="flex flex-col items-center gap-3">
+            <div className="flex flex-col items-center justify-center gap-3 text-center mx-auto">
               <div className="relative group/avatar cursor-pointer">
                 <div className="h-24 w-24 overflow-hidden rounded-full border-4 border-primary/20 bg-muted relative flex items-center justify-center">
                   {editedPhotoURL ? (
@@ -2052,7 +2052,9 @@ export default function App() {
                   className="hidden" 
                 />
               </div>
-              <p className="text-[10px] text-muted-foreground font-semibold uppercase">Haz click en la imagen para subir tu propia foto</p>
+              <p className="text-[10px] text-muted-foreground font-bold uppercase transition-colors tracking-wide max-w-[260px] leading-relaxed mx-auto">
+                Haz click en la imagen para subir tu propia foto
+              </p>
             </div>
 
             {/* Presets de Avatar */}

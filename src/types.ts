@@ -77,6 +77,7 @@ export interface Client {
   feedback?: string;
   renewalCount?: number;
   renewalStatus?: 'unknown' | 'will_renew' | 'will_not_renew';
+  contractReconsultDate?: string;
   budget?: number;
   adspend?: number;
   targetLeads?: number;

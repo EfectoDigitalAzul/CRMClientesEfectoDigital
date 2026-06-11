@@ -37,6 +37,16 @@ import {
   PopoverTitle
 } from './components/ui/popover';
 import { Avatar, AvatarFallback, AvatarImage } from './components/ui/avatar';
+import { Input } from './components/ui/input';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogFooter, 
+  DialogDescription 
+} from './components/ui/dialog';
+import { Camera, Edit3, Loader2 } from 'lucide-react';
 import { Toaster } from 'sonner';
 import { toast } from 'sonner';
 import { format, parseISO, differenceInDays } from 'date-fns';
@@ -57,7 +67,32 @@ import LeadDetails from './components/LeadDetails';
 import ClientReportsDashboard from './components/ClientReportsDashboard';
 import ClientTemplates from './components/ClientTemplates';
 import TrashBin from './components/TrashBin';
+import { DatePicker } from './components/ui/DatePicker';
 import { Briefcase, Target, User as UserIcon, Lock, ShieldCheck, Mail, History as HistoryIcon, Activity, BarChart3, ChartPie, FileCode, Trash2, ArrowLeft } from 'lucide-react';
+
+const PRESET_AVATARS = [
+  { name: 'Casual 1', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80' },
+  { name: 'Casual 2', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&h=120&q=80' },
+  { name: 'Casual 3', url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&h=120&q=80' },
+  { name: 'Casual 4', url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&h=120&q=80' },
+  { name: 'Casual 5', url: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=120&h=120&q=80' },
+  { name: 'Casual 6', url: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=120&h=120&q=80' },
+  { name: 'Minimal Pink', url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%23ff758c"/><stop offset="100%" stop-color="%23ff7eb3"/></linearGradient></defs><rect width="100" height="100" fill="url(%23g)"/><circle cx="50" cy="40" r="18" fill="white" fill-opacity="0.85"/><path d="M22,82 C22,65 34,58 50,58 C66,58 78,65 78,82" fill="white" fill-opacity="0.85"/></svg>' },
+  { name: 'Minimal Teal', url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%232af598"/><stop offset="100%" stop-color="%23009efd"/></linearGradient></defs><rect width="100" height="100" fill="url(%23g)"/><circle cx="50" cy="40" r="18" fill="white" fill-opacity="0.85"/><path d="M22,82 C22,65 34,58 50,58 C66,58 78,65 78,82" fill="white" fill-opacity="0.85"/></svg>' },
+  { name: 'Minimal Purple', url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%23a18cd1"/><stop offset="100%" stop-color="%23fbc2eb"/></linearGradient></defs><rect width="100" height="100" fill="url(%23g)"/><circle cx="50" cy="40" r="18" fill="white" fill-opacity="0.85"/><path d="M22,82 C22,65 34,58 50,58 C66,58 78,65 78,82" fill="white" fill-opacity="0.85"/></svg>' },
+  { name: 'Minimal Orange', url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%23ff9a9e"/><stop offset="100%" stop-color="%23fecfef"/></linearGradient></defs><rect width="100" height="100" fill="url(%23g)"/><circle cx="50" cy="40" r="18" fill="white" fill-opacity="0.85"/><path d="M22,82 C22,65 34,58 50,58 C66,58 78,65 78,82" fill="white" fill-opacity="0.85"/></svg>' },
+];
+
+const getRoleLabel = (role: UserRole) => {
+  switch (role) {
+    case 'director': return 'Director';
+    case 'account_manager': return 'Account Manager';
+    case 'setter': return 'Setter';
+    case 'commercial': return 'Commercial';
+    case 'client': return 'Cliente';
+    default: return role;
+  }
+};
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -96,6 +131,94 @@ export default function App() {
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [targetTaskId, setTargetTaskId] = useState<string | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+
+  // Profile settings states and handlers
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [editedDisplayName, setEditedDisplayName] = useState('');
+  const [editedPhotoURL, setEditedPhotoURL] = useState('');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  const handleOpenProfileModal = () => {
+    if (profile) {
+      setEditedDisplayName(profile.displayName || '');
+      setEditedPhotoURL(profile.photoURL || '');
+      setIsProfileModalOpen(true);
+    }
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 350 * 1024) {
+      toast.error('La imagen es demasiado grande. Selecciona una menor a 350KB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (typeof event.target?.result === 'string') {
+        setEditedPhotoURL(event.target.result);
+        toast.success('Miniatura cargada. Guarda para confirmar.');
+      }
+    };
+    reader.onerror = () => {
+      toast.error('Error al leer el archivo');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!editedDisplayName.trim()) {
+      toast.error('El nombre no puede estar vacío');
+      return;
+    }
+
+    setIsSavingProfile(true);
+
+    try {
+      const updatedProfile = {
+        ...profile!,
+        displayName: editedDisplayName,
+        photoURL: editedPhotoURL,
+      };
+
+      if (isDemoMode) {
+        const stored = localStorage.getItem('demo-users');
+        if (stored) {
+          const demoUsers = JSON.parse(stored);
+          const index = demoUsers.findIndex((u: any) => u.uid === profile?.uid);
+          if (index !== -1) {
+            demoUsers[index].displayName = editedDisplayName;
+            demoUsers[index].photoURL = editedPhotoURL;
+            localStorage.setItem('demo-users', JSON.stringify(demoUsers));
+          }
+        }
+        setProfile(updatedProfile);
+        window.dispatchEvent(new CustomEvent('demo-users-updated'));
+        toast.success('Perfil actualizado correctamente');
+        setIsProfileModalOpen(false);
+      } else {
+        if (profile?.uid) {
+          await updateDoc(doc(db, 'users', profile.uid), {
+            displayName: editedDisplayName,
+            photoURL: editedPhotoURL
+          });
+          
+          setProfile(updatedProfile);
+          toast.success('Perfil actualizado correctamente');
+          setIsProfileModalOpen(false);
+        } else {
+          throw new Error('ID de usuario no encontrado');
+        }
+      }
+    } catch (error: any) {
+      console.error("Error al actualizar perfil:", error);
+      toast.error(`Error al guardar: ${error.message || error}`);
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
 
   const [navigationHistory, setNavigationHistory] = useState<Array<{ tab: string; clientId: string; leadViewMode: 'table' | 'kanban' | 'followup' }>>([]);
   const isBackNavigating = React.useRef(false);
@@ -983,9 +1106,18 @@ export default function App() {
     if (!selectedClient || !selectedClient.contractEndDate) return null;
     
     try {
-      const endDate = new Date(selectedClient.contractEndDate.replace(/-/g, '/'));
       const now = new Date();
       now.setHours(0, 0, 0, 0);
+
+      if (selectedClient.contractReconsultDate && selectedClient.contractReconsultDate.trim() !== '') {
+        const reconsultDate = new Date(selectedClient.contractReconsultDate.replace(/-/g, '/'));
+        reconsultDate.setHours(0, 0, 0, 0);
+        if (now < reconsultDate) {
+          return null;
+        }
+      }
+
+      const endDate = new Date(selectedClient.contractEndDate.replace(/-/g, '/'));
       endDate.setHours(0, 0, 0, 0);
       
       const diffTime = endDate.getTime() - now.getTime();
@@ -1189,17 +1321,38 @@ export default function App() {
             </nav>
 
             <div className="mt-auto pt-6 border-t border-border">
-              <div className="flex items-center gap-3 p-3 bg-muted rounded-xl">
+              <div 
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  handleOpenProfileModal();
+                }}
+                className="flex items-center gap-3 p-3 bg-muted rounded-xl cursor-pointer hover:bg-muted-foreground/15 transition-all text-left group/profile"
+                title="Editar Perfil"
+              >
                 <Avatar className="h-10 w-10 border-2 border-primary">
+                  {profile?.photoURL ? (
+                    <AvatarImage src={profile.photoURL} alt={profile.displayName} />
+                  ) : null}
                   <AvatarFallback className="bg-primary text-white font-bold">
-                    {profile?.displayName.charAt(0)}
+                    {profile?.displayName?.charAt(0)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 overflow-hidden">
-                  <p className="truncate text-sm font-bold">{profile?.displayName}</p>
-                  <p className="truncate text-[10px] text-muted-foreground uppercase font-semibold">{profile?.role}</p>
+                  <div className="flex items-center gap-1">
+                    <p className="truncate text-sm font-bold group-hover/profile:text-primary transition-colors">{profile?.displayName}</p>
+                    <Edit3 size={10} className="text-muted-foreground opacity-0 group-hover/profile:opacity-100 transition-opacity" />
+                  </div>
+                  <p className="truncate text-[10px] text-muted-foreground uppercase font-semibold">{profile ? getRoleLabel(profile.role) : ''}</p>
                 </div>
-                <Button variant="ghost" size="icon" onClick={handleLogout} className="text-destructive">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleLogout();
+                  }} 
+                  className="text-destructive hover:bg-destructive/10"
+                >
                   <LogOut size={18} />
                 </Button>
               </div>
@@ -1328,21 +1481,39 @@ export default function App() {
         </nav>
 
         <div className="border-t p-4 border-border">
-          <div className="flex items-center gap-3 rounded-xl bg-muted p-3">
-            <div className="h-10 w-10 overflow-hidden rounded-full bg-background border-2 border-primary">
+          <div 
+            onClick={handleOpenProfileModal}
+            className="flex items-center gap-3 rounded-xl bg-muted p-3 cursor-pointer hover:bg-muted-foreground/15 transition-all text-left group/profile"
+            title="Editar Perfil"
+          >
+            <div className="h-10 w-10 overflow-hidden rounded-full bg-background border-2 border-primary relative flex items-center justify-center shrink-0">
               {profile?.photoURL ? (
                 <img src={profile.photoURL} alt={profile.displayName} className="h-full w-full object-cover" />
               ) : (
-                <div className="flex h-full w-full items-center justify-center bg-primary text-white">
-                  {profile?.displayName.charAt(0)}
+                <div className="flex h-full w-full items-center justify-center bg-primary text-white font-bold">
+                  {profile?.displayName?.charAt(0)}
                 </div>
               )}
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/profile:opacity-100 transition-opacity">
+                <Camera size={12} className="text-white" />
+              </div>
             </div>
             <div className="flex-1 overflow-hidden">
-              <p className="truncate text-sm font-bold">{profile?.displayName}</p>
-              <p className="truncate text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">{profile?.role}</p>
+              <div className="flex items-center gap-1">
+                <p className="truncate text-sm font-bold group-hover/profile:text-primary transition-colors">{profile?.displayName}</p>
+                <Edit3 size={10} className="text-muted-foreground opacity-0 group-hover/profile:opacity-100 transition-opacity shrink-0" />
+              </div>
+              <p className="truncate text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">{profile ? getRoleLabel(profile.role) : ''}</p>
             </div>
-            <Button variant="ghost" size="icon" onClick={handleLogout} className="text-muted-foreground hover:text-destructive">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={(e) => {
+                e.stopPropagation();
+                handleLogout();
+              }} 
+              className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+            >
               <LogOut size={16} />
             </Button>
           </div>
@@ -1515,6 +1686,96 @@ export default function App() {
                     >
                       Sí, renovar (+1 Mes)
                     </Button>
+                  )}
+                  {alert.status === 'unknown' && selectedClient && (
+                    <Popover>
+                      <PopoverTrigger className="inline-flex items-center justify-center border border-amber-500/30 hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-xs h-8 bg-transparent gap-1.5 px-3 py-1.5 rounded-md transition-colors cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-amber-500/25">
+                        <Calendar size={14} />
+                        Volver a consultar
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 p-4 bg-card border border-border rounded-xl shadow-xl space-y-3" align="end">
+                        <div className="space-y-1">
+                          <h4 className="font-bold text-xs text-foreground">Postergar consulta</h4>
+                          <p className="text-[10px] text-muted-foreground leading-snug">
+                            Oculta este cartel y recuerda volver a consultar sobre la renovación en la fecha seleccionada.
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <DatePicker
+                            date={selectedClient.contractReconsultDate || ''}
+                            setDate={async (newDate) => {
+                              if (!selectedClient) return;
+                              const updated: Client = {
+                                ...selectedClient,
+                                contractReconsultDate: newDate,
+                                renewalStatus: 'unknown'
+                              };
+                              try {
+                                if (isDemoMode) {
+                                  const stored = localStorage.getItem('demo-clients');
+                                  if (stored) {
+                                    const all: Client[] = JSON.parse(stored);
+                                    const newList = all.map(c => c.id === selectedClient.id ? updated : c);
+                                    localStorage.setItem('demo-clients', JSON.stringify(newList));
+                                    window.dispatchEvent(new CustomEvent('demo-clients-updated'));
+                                  }
+                                } else {
+                                  await updateDoc(doc(db, 'clients', selectedClient.id), {
+                                    contractReconsultDate: newDate,
+                                    renewalStatus: 'unknown'
+                                  });
+                                }
+                                setSelectedClient(updated);
+                                toast.success(`Se agendó consultar de nuevo el ${newDate.split('-').reverse().join('/')}. El cartel se ocultará hasta ese día.`);
+                              } catch (e: any) {
+                                toast.error(`Error al agendar: ${e.message || e}`);
+                              }
+                            }}
+                            label="Elegir fecha"
+                          />
+                        </div>
+                        {selectedClient.contractReconsultDate && (
+                          <div className="flex items-center justify-between gap-2 border-t border-border pt-2 mt-1">
+                            <span className="text-[10px] text-muted-foreground truncate">
+                              Agendado: {selectedClient.contractReconsultDate.split('-').reverse().join('/')}
+                            </span>
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              onClick={async () => {
+                                if (!selectedClient) return;
+                                const updated: Client = {
+                                  ...selectedClient,
+                                  contractReconsultDate: ""
+                                };
+                                try {
+                                  if (isDemoMode) {
+                                    const stored = localStorage.getItem('demo-clients');
+                                    if (stored) {
+                                      const all: Client[] = JSON.parse(stored);
+                                      const newList = all.map(c => c.id === selectedClient.id ? updated : c);
+                                      localStorage.setItem('demo-clients', JSON.stringify(newList));
+                                      window.dispatchEvent(new CustomEvent('demo-clients-updated'));
+                                    }
+                                  } else {
+                                    await updateDoc(doc(db, 'clients', selectedClient.id), {
+                                      contractReconsultDate: ""
+                                    });
+                                  }
+                                  setSelectedClient(updated);
+                                  toast.success('Fecha de re-consulta eliminada');
+                                } catch (e: any) {
+                                  toast.error(`Error: ${e.message || e}`);
+                                }
+                              }}
+                              className="text-[10px] text-destructive hover:text-destructive hover:bg-destructive/10 h-6 px-2"
+                            >
+                              Eliminar
+                            </Button>
+                          </div>
+                        )}
+                      </PopoverContent>
+                    </Popover>
                   )}
                   {alert.status !== 'will_not_renew' && (
                     <Button
@@ -1751,6 +2012,136 @@ export default function App() {
           clientHasSetter={clientHasSetter}
         />
       )}
+
+      {/* Diálogo del Perfil de Usuario */}
+      <Dialog open={isProfileModalOpen} onOpenChange={setIsProfileModalOpen}>
+        <DialogContent className="sm:max-w-[420px] bg-card border border-border text-card-foreground p-6 shadow-xl relative rounded-xl overflow-hidden">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
+              <UserIcon className="w-5 h-5 text-primary" />
+              Mi Perfil
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground text-xs">
+              Actualiza tu nickname de usuario y tu foto de perfil.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 pt-2">
+            {/* Vista Previa del Avatar */}
+            <div className="flex flex-col items-center gap-3">
+              <div className="relative group/avatar cursor-pointer">
+                <div className="h-24 w-24 overflow-hidden rounded-full border-4 border-primary/20 bg-muted relative flex items-center justify-center">
+                  {editedPhotoURL ? (
+                    <img src={editedPhotoURL} alt="Vista previa avatar" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="text-3xl font-black text-muted-foreground">
+                      {editedDisplayName ? editedDisplayName.charAt(0).toUpperCase() : '?'}
+                    </div>
+                  )}
+                  {/* Hover Cap para Cargar Foto */}
+                  <label htmlFor="modal-avatar-upload" className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity duration-200 cursor-pointer text-white">
+                    <Camera className="w-6 h-6 mb-1" />
+                    <span className="text-[10px] font-semibold uppercase">Subir Foto</span>
+                  </label>
+                </div>
+                <input 
+                  type="file" 
+                  id="modal-avatar-upload" 
+                  accept="image/*" 
+                  onChange={handleImageUpload} 
+                  className="hidden" 
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground font-semibold uppercase">Haz click en la imagen para subir tu propia foto</p>
+            </div>
+
+            {/* Presets de Avatar */}
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">O selecciona un avatar prediseñado</label>
+              <div className="flex gap-2 py-1 overflow-x-auto scrollbar-thin dark:scrollbar-thumb-neutral-800 scrollbar-thumb-neutral-200 pr-1">
+                {PRESET_AVATARS.map((preset, idx) => {
+                  const isSelected = editedPhotoURL === preset.url;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setEditedPhotoURL(preset.url)}
+                      className={`relative flex-shrink-0 w-11 h-11 rounded-full overflow-hidden transition-all duration-200 hover:scale-105 active:scale-95 ${
+                        isSelected 
+                          ? 'ring-2 ring-primary ring-offset-2 ring-offset-background scale-105' 
+                          : 'opacity-70 hover:opacity-100 border border-border'
+                      }`}
+                    >
+                      <img src={preset.url} alt={preset.name} className="w-full h-full object-cover" />
+                      {isSelected && (
+                        <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                          <CheckCircle2 className="w-4 h-4 text-primary bg-background rounded-full p-0.5" />
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Campos de Nombre y Datos */}
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="perfDisplayName" className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Nickname / Nombre para Mostrar</Label>
+                <div className="relative">
+                  <Input 
+                    id="perfDisplayName"
+                    value={editedDisplayName}
+                    onChange={(e) => setEditedDisplayName(e.target.value)}
+                    placeholder="Escribe tu nickname"
+                    maxLength={32}
+                    className="font-semibold"
+                  />
+                </div>
+              </div>
+
+              {/* Datos de Solo Lectura */}
+              <div className="bg-muted/50 p-3 rounded-lg border border-border/80 space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-muted-foreground">Correo / Usuario</span>
+                  <span className="font-mono font-medium text-foreground truncate max-w-[200px]" title={profile?.email}>{profile?.email}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-muted-foreground">Rol actual</span>
+                  <span className="bg-primary/10 text-primary border border-primary/20 rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider">
+                    {profile ? getRoleLabel(profile.role) : ''}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="mt-6">
+            <Button 
+              variant="outline" 
+              onClick={() => setIsProfileModalOpen(false)}
+              className="border-border text-foreground hover:bg-muted"
+            >
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleSaveProfile} 
+              disabled={isSavingProfile || !editedDisplayName.trim()} 
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold flex items-center gap-1.5"
+            >
+              {isSavingProfile ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Guardando...</span>
+                </>
+              ) : (
+                'Guardar Cambios'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Toaster position="top-right" theme={theme} />
     </div>
   );

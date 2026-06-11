@@ -1456,6 +1456,20 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
                   </SelectContent>
                 </Select>
               </div>
+
+              {editingClient?.renewalStatus === "unknown" && (
+                <div className="col-span-2 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground">Fecha para volver a consultar</Label>
+                  <DatePicker
+                    date={editingClient?.contractReconsultDate}
+                    setDate={(d) => setEditingClient(editingClient ? {...editingClient, contractReconsultDate: d} : null)}
+                    label="Elegir fecha de re-consulta"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    El cartel de vencimiento de contrato se ocultará automáticamente hasta esta fecha de forma transitoria.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Sección 3: Configuración Técnica (LH2) */}

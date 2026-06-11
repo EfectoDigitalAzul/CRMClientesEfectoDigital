@@ -68,7 +68,7 @@ import ClientReportsDashboard from './components/ClientReportsDashboard';
 import ClientTemplates from './components/ClientTemplates';
 import TrashBin from './components/TrashBin';
 import { DatePicker } from './components/ui/DatePicker';
-import { Briefcase, Target, User as UserIcon, Lock, ShieldCheck, Mail, History as HistoryIcon, Activity, BarChart3, ChartPie, FileCode, Trash2, ArrowLeft } from 'lucide-react';
+import { Briefcase, Target, User as UserIcon, Lock, ShieldCheck, Mail, History as HistoryIcon, Activity, BarChart3, ChartPie, FileCode, Trash2, ArrowLeft, Percent, Grid, List, RefreshCcw, Info } from 'lucide-react';
 
 const PRESET_AVATARS = [
   { name: 'Casual 1', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80' },
@@ -131,6 +131,111 @@ export default function App() {
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [targetTaskId, setTargetTaskId] = useState<string | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [clientSearchTerm, setClientSearchTerm] = useState('');
+  const [clientFilterStatus, setClientFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const [selectedAMFilter, setSelectedAMFilter] = useState<string>('all');
+  const [customRenewalEndDate, setCustomRenewalEndDate] = useState<string>('');
+  const [clientViewMode, setClientViewMode] = useState<'grid' | 'table'>('grid');
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+
+  // States for Client Card & Renewal Card Dialog from the clients grid
+  const [clientToViewFicha, setClientToViewFicha] = useState<Client | null>(null);
+  const [editedPlanName, setEditedPlanName] = useState('Standard');
+  const [editedContractStartDate, setEditedContractStartDate] = useState('');
+  const [editedContractEndDate, setEditedContractEndDate] = useState('');
+  const [editedRenewalCount, setEditedRenewalCount] = useState(0);
+  const [editedRenewalStatus, setEditedRenewalStatus] = useState<'unknown' | 'will_renew' | 'will_not_renew'>('unknown');
+  const [editedContractReconsultDate, setEditedContractReconsultDate] = useState('');
+  const [editedNotes, setEditedNotes] = useState('');
+  const [isSavingFicha, setIsSavingFicha] = useState(false);
+  const [renewalExtendToDate, setRenewalExtendToDate] = useState('');
+
+  const handleOpenFicha = (client: Client) => {
+    setClientToViewFicha(client);
+    setEditedPlanName(client.planName || 'Standard');
+    setEditedContractStartDate(client.contractStartDate || '');
+    setEditedContractEndDate(client.contractEndDate || '');
+    setEditedRenewalCount(client.renewalCount || 0);
+    setEditedRenewalStatus(client.renewalStatus || 'unknown');
+    setEditedContractReconsultDate(client.contractReconsultDate || '');
+    setEditedNotes(client.notes || '');
+
+    // Set default extension end date to 1 month after current contract end date (or 1 month from now)
+    let nextDefaultDate = '';
+    const currentEnd = client.contractEndDate;
+    if (currentEnd) {
+      try {
+        const d = new Date(currentEnd.replace(/-/g, '/'));
+        d.setMonth(d.getMonth() + 1);
+        nextDefaultDate = d.toISOString().split('T')[0];
+      } catch (e) {
+        console.error(e);
+      }
+    } else {
+      const d = new Date();
+      d.setMonth(d.getMonth() + 1);
+      nextDefaultDate = d.toISOString().split('T')[0];
+    }
+    setRenewalExtendToDate(nextDefaultDate);
+  };
+
+  const handleAddRenewal = () => {
+    if (!renewalExtendToDate) {
+      toast.error("Por favor, selecciona hasta qué fecha se extiende el contrato.");
+      return;
+    }
+    
+    setEditedRenewalCount(prev => prev + 1);
+    setEditedContractEndDate(renewalExtendToDate);
+    setEditedRenewalStatus('will_renew');
+    toast.success(`¡Renovación agregada! Se incrementó el acumulado, se extendió la finalización del contrato hasta el ${renewalExtendToDate} y se marcó como 'Sí, renueba'.`);
+
+    // Prepare the next default extension suggested date as 1 month after this newly set one
+    try {
+      const d = new Date(renewalExtendToDate.replace(/-/g, '/'));
+      d.setMonth(d.getMonth() + 1);
+      setRenewalExtendToDate(d.toISOString().split('T')[0]);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleSaveFicha = async () => {
+    if (!clientToViewFicha) return;
+    setIsSavingFicha(true);
+    try {
+      const updatedClient: Client = {
+        ...clientToViewFicha,
+        planName: editedPlanName,
+        contractStartDate: editedContractStartDate,
+        contractEndDate: editedContractEndDate,
+        renewalCount: editedRenewalCount,
+        renewalStatus: editedRenewalStatus,
+        contractReconsultDate: editedContractReconsultDate,
+        notes: editedNotes
+      };
+
+      if (isDemoMode) {
+        const stored = localStorage.getItem('demo-clients');
+        const demoClients = stored ? JSON.parse(stored) : [];
+        const updatedList = demoClients.map((c: any) => c.id === clientToViewFicha.id ? updatedClient : c);
+        localStorage.setItem('demo-clients', JSON.stringify(updatedList));
+        setClients(updatedList);
+        window.dispatchEvent(new CustomEvent('demo-clients-updated'));
+      } else {
+        const { id, ...data } = updatedClient as any;
+        await updateDoc(doc(db, 'clients', clientToViewFicha.id), data);
+      }
+
+      toast.success("Ficha del cliente y datos de renovación guardados con éxito.");
+      setClientToViewFicha(null);
+    } catch (error) {
+      console.error("Error al guardar ficha:", error);
+      toast.error("Ocurrió un error al intentar actualizar la ficha.");
+    } finally {
+      setIsSavingFicha(false);
+    }
+  };
 
   // Profile settings states and handlers
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -348,16 +453,43 @@ export default function App() {
   }, [isDemoMode, user, profile]);
 
   useEffect(() => {
+    if (isDemoMode) {
+      const updateUsers = () => {
+        const stored = localStorage.getItem('demo-users');
+        if (stored) {
+          setAllUsers(JSON.parse(stored) as UserProfile[]);
+        }
+      };
+      updateUsers();
+      window.addEventListener('demo-users-updated', updateUsers);
+      return () => window.removeEventListener('demo-users-updated', updateUsers);
+    } else {
+      if (!user) return;
+      const path = 'users';
+      const unsubscribe = onSnapshot(collection(db, path), (snapshot) => {
+        const users = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
+        setAllUsers(users);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, path);
+      });
+      return () => unsubscribe();
+    }
+  }, [isDemoMode, user]);
+
+  useEffect(() => {
     if (profile && clients.length > 0) {
       if (!ROLE_PERMISSIONS[profile.role]?.canViewClients) {
         const isAllowed = clients.some(c => c.id === selectedClientId);
         if (!isAllowed) {
-          setSelectedClientId(clients[0].id);
+          // If they have an assigned client id, use it, otherwise fall back to first
+          if (profile.assignedClientId) {
+            setSelectedClientId(profile.assignedClientId);
+          } else {
+            setSelectedClientId(clients[0].id);
+          }
         }
       } else {
-        if (!selectedClientId) {
-          setSelectedClientId(clients[0].id);
-        }
+        // Staff/users with multiple client access should start with NO client selected by default as requested.
       }
     }
   }, [clients, selectedClientId, profile]);
@@ -1162,11 +1294,33 @@ export default function App() {
     }
   };
 
-  const handlePromoRenewal = async (status: 'will_renew' | 'will_not_renew') => {
+  const calculateProgress = (startDate?: string, endDate?: string): number => {
+    if (!startDate || !endDate) return 0;
+    try {
+      const start = parseISO(startDate);
+      const end = parseISO(endDate);
+      const now = new Date();
+      
+      if (now < start) return 0;
+      if (now > end) return 100;
+      
+      const totalDays = differenceInDays(end, start);
+      const daysPassed = differenceInDays(now, start);
+      
+      if (totalDays <= 0) return 100;
+      
+      const progress = Math.round((daysPassed / totalDays) * 100);
+      return Math.min(100, Math.max(0, progress));
+    } catch (error) {
+      return 0;
+    }
+  };
+
+  const handlePromoRenewal = async (status: 'will_renew' | 'will_not_renew', customEndDate?: string) => {
     if (!selectedClient) return;
     
-    let nextEndDate = selectedClient.contractEndDate;
-    if (status === 'will_renew' && nextEndDate) {
+    let nextEndDate = customEndDate || selectedClient.contractEndDate;
+    if (status === 'will_renew' && !customEndDate && nextEndDate) {
       try {
         const d = new Date(nextEndDate.replace(/-/g, '/'));
         d.setMonth(d.getMonth() + 1);
@@ -1228,16 +1382,28 @@ export default function App() {
 
             <nav className="flex-1 space-y-2">
               {profile?.role !== 'client' && (profile?.role === 'director' || profile?.role === 'account_manager' || profile?.role === 'setter' || profile?.role === 'commercial') && (
-                <SidebarItem 
-                  icon={<Users size={18} />} 
-                  label="Equipo" 
-                  active={activeTab === 'team'} 
-                  onClick={() => {
-                    setActiveTab('team');
-                    setSelectedClientId('');
-                    setIsMobileMenuOpen(false);
-                  }} 
-                />
+                <>
+                  <SidebarItem 
+                    icon={<Briefcase size={18} />} 
+                    label="Clientes (Panel)" 
+                    active={activeTab === 'dashboard' && !selectedClientId} 
+                    onClick={() => {
+                      setActiveTab('dashboard');
+                      setSelectedClientId('');
+                      setIsMobileMenuOpen(false);
+                    }} 
+                  />
+                  <SidebarItem 
+                    icon={<Users size={18} />} 
+                    label="Equipo" 
+                    active={activeTab === 'team'} 
+                    onClick={() => {
+                      setActiveTab('team');
+                      setSelectedClientId('');
+                      setIsMobileMenuOpen(false);
+                    }} 
+                  />
+                </>
               )}
 
               {selectedClient && (
@@ -1374,15 +1540,26 @@ export default function App() {
         
         <nav className="flex-1 space-y-1 py-4">
           {profile?.role !== 'client' && (profile?.role === 'director' || profile?.role === 'account_manager' || profile?.role === 'setter' || profile?.role === 'commercial') && (
-            <SidebarItem 
-              icon={<Users size={18} />} 
-              label="Equipo" 
-              active={activeTab === 'team'} 
-              onClick={() => {
-                setActiveTab('team');
-                setSelectedClientId('');
-              }} 
-            />
+            <>
+              <SidebarItem 
+                icon={<Briefcase size={18} />} 
+                label="Clientes (Panel)" 
+                active={activeTab === 'dashboard' && !selectedClientId} 
+                onClick={() => {
+                  setActiveTab('dashboard');
+                  setSelectedClientId('');
+                }} 
+              />
+              <SidebarItem 
+                icon={<Users size={18} />} 
+                label="Equipo" 
+                active={activeTab === 'team'} 
+                onClick={() => {
+                  setActiveTab('team');
+                  setSelectedClientId('');
+                }} 
+              />
+            </>
           )}
 
           {selectedClient && (
@@ -1679,13 +1856,63 @@ export default function App() {
                 </div>
                 <div className="flex items-center gap-2 self-end sm:self-center">
                   {alert.status !== 'will_renew' && (
-                    <Button
-                      size="sm"
-                      onClick={() => handlePromoRenewal('will_renew')}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 shadow-none"
-                    >
-                      Sí, renovar (+1 Mes)
-                    </Button>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          size="sm"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 shadow-none"
+                        >
+                          Sí, renovar
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 p-4 bg-card border border-border rounded-xl shadow-xl space-y-3" align="end">
+                        <div className="space-y-1">
+                          <h4 className="font-extrabold text-xs text-foreground uppercase tracking-wider">Confirmar Renovación</h4>
+                          <p className="text-[10px] text-muted-foreground leading-snug">
+                            Ingresa la fecha de finalización de la nueva prórroga de contrato. Por defecto es de 1 mes más.
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[9px] font-black uppercase text-muted-foreground block">Nueva Fecha de Fin</label>
+                          <DatePicker
+                            date={customRenewalEndDate || (() => {
+                              if (selectedClient?.contractEndDate) {
+                                try {
+                                  const d = new Date(selectedClient.contractEndDate.replace(/-/g, '/'));
+                                  d.setMonth(d.getMonth() + 1);
+                                  return d.toISOString().split('T')[0];
+                                } catch {
+                                  return '';
+                                }
+                              }
+                              return '';
+                            })()}
+                            setDate={(newDate) => setCustomRenewalEndDate(newDate)}
+                            label="Seleccionar fecha"
+                          />
+                        </div>
+                        <Button
+                          size="sm"
+                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 shadow-none"
+                          onClick={() => {
+                            const dateToUse = customRenewalEndDate || (() => {
+                              if (selectedClient?.contractEndDate) {
+                                try {
+                                  const d = new Date(selectedClient.contractEndDate.replace(/-/g, '/'));
+                                  d.setMonth(d.getMonth() + 1);
+                                  return d.toISOString().split('T')[0];
+                                } catch {}
+                              }
+                              return '';
+                            })();
+                            handlePromoRenewal('will_renew', dateToUse);
+                            setCustomRenewalEndDate('');
+                          }}
+                        >
+                          Confirmar Prórroga
+                        </Button>
+                      </PopoverContent>
+                    </Popover>
                   )}
                   {alert.status === 'unknown' && selectedClient && (
                     <Popover>
@@ -1895,6 +2122,24 @@ export default function App() {
                     </span>
                   </div>
 
+                  {/* Contract Progress Widget */}
+                  <div className="p-4 bg-muted/35 rounded-2xl border border-border/15 flex flex-col justify-center min-w-[150px]">
+                    <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1">
+                      <Percent size={10} className="text-emerald-500" />
+                      Porcentaje de Contrato
+                    </span>
+                    <span className="text-xs font-black text-foreground flex items-center gap-1.5 leading-none">
+                      Progreso: <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 italic">{calculateProgress(selectedClient.contractStartDate, selectedClient.contractEndDate)}%</span>
+                    </span>
+                    {/* Tiny Progress Bar */}
+                    <div className="w-full bg-muted/75 h-1.5 rounded-full mt-2 overflow-hidden border border-border/15">
+                      <div 
+                        className="bg-emerald-500 h-full rounded-full transition-all duration-300" 
+                        style={{ width: `${calculateProgress(selectedClient.contractStartDate, selectedClient.contractEndDate)}%` }} 
+                      />
+                    </div>
+                  </div>
+
                   {/* Historical Clients Shortcut Popup */}
                   {isStaff && (
                     <Popover>
@@ -1943,30 +2188,423 @@ export default function App() {
             </div>
           )}
 
-          {activeTab === 'dashboard' && <DashboardStats profile={profile} isDemoMode={isDemoMode} clientId={selectedClientId} />}
-          {activeTab === 'templates' && selectedClient && (
-            <ClientTemplates client={selectedClient} isDemoMode={isDemoMode} />
-          )}
-          {activeTab === 'leads' && (
-            <LeadList 
-              profile={profile} 
-              isDemoMode={isDemoMode} 
-              clientId={selectedClientId} 
-              targetId={targetTaskId}
-              onTargetProcessed={() => setTargetTaskId(null)}
-              onLeadClick={handleOpenLeadDetails}
-              initialViewMode={leadViewMode}
-              clientHasSetter={clientHasSetter}
-            />
-          )}
-          {activeTab === 'meetings' && (
-            <MeetingAgenda 
-              clientId={selectedClientId} 
-              isDemoMode={isDemoMode} 
-              profile={profile}
-              targetId={targetTaskId}
-              onTargetProcessed={() => setTargetTaskId(null)}
-            />
+          {['dashboard', 'templates', 'leads', 'meetings'].includes(activeTab) && !selectedClientId ? (
+            <div className="w-full max-w-7xl mx-auto px-4 py-8 space-y-8 animate-fade-in">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 border-b border-border/20 pb-6">
+                <div className="space-y-2">
+                  <span className="text-[10px] font-black uppercase text-primary tracking-widest italic">PANEL GENERAL</span>
+                  <h2 className="text-3xl font-black text-foreground italic uppercase tracking-tighter">
+                    Control de Clientes
+                  </h2>
+                  <p className="text-xs text-muted-foreground max-w-xl">
+                    Visualiza y gestiona todos los espacios de trabajo de clientes activos, completados o inactivos. Monitorea el progreso de sus contratos y renovaciones en tiempo real.
+                  </p>
+                </div>
+                
+                <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="text"
+                      placeholder="Buscar cliente o plan..."
+                      value={clientSearchTerm}
+                      onChange={(e) => setClientSearchTerm(e.target.value)}
+                      className="pl-9 h-9 w-full sm:w-64 bg-card border-border shadow-none text-xs"
+                    />
+                    {clientSearchTerm && (
+                      <button 
+                        onClick={() => setClientSearchTerm('')} 
+                        className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground text-xs font-bold font-sans"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div className="flex bg-muted/50 p-1 rounded-lg border border-border/10">
+                    <button
+                      onClick={() => setClientFilterStatus('all')}
+                      className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${
+                        clientFilterStatus === 'all'
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Todos ({clients.length})
+                    </button>
+                    <button
+                      onClick={() => setClientFilterStatus('active')}
+                      className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${
+                        clientFilterStatus === 'active'
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Activos ({clients.filter(c => !c.status || !['completed', 'cancelled'].includes(c.status)).length})
+                    </button>
+                    <button
+                      onClick={() => setClientFilterStatus('inactive')}
+                      className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${
+                        clientFilterStatus === 'inactive'
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Inactivos ({clients.filter(c => c.status && ['completed', 'cancelled'].includes(c.status)).length})
+                    </button>
+                  </div>
+
+                  {/* Account Manager Filter Dropdown */}
+                  <div className="flex bg-muted/50 p-1 rounded-lg border border-border/10 items-center">
+                    <select
+                      value={selectedAMFilter}
+                      onChange={(e) => setSelectedAMFilter(e.target.value)}
+                      className="px-2.5 py-1 bg-transparent text-[10px] font-bold focus:outline-none cursor-pointer text-foreground rounded-md transition-all border-none outline-none"
+                    >
+                      <option value="all" className="bg-card text-foreground font-sans">👤 Todos los AMs</option>
+                      {allUsers
+                        .filter(u => ['account_manager', 'director', 'commercial'].includes(u.role))
+                        .map(am => (
+                          <option key={am.uid} value={am.uid} className="bg-card text-foreground font-sans">
+                            👤 {am.displayName || am.username}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  {/* View Mode Toggle */}
+                  <div className="flex bg-muted/50 p-1 rounded-lg border border-border/10">
+                    <button
+                      onClick={() => setClientViewMode('grid')}
+                      className={`p-1.5 rounded-md transition-all ${
+                        clientViewMode === 'grid'
+                          ? 'bg-background text-primary shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                      title="Vista Cuadrícula"
+                    >
+                      <Grid size={14} className="mx-0.5" />
+                    </button>
+                    <button
+                      onClick={() => setClientViewMode('table')}
+                      className={`p-1.5 rounded-md transition-all ${
+                        clientViewMode === 'table'
+                          ? 'bg-background text-primary shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                      title="Vista Tabla"
+                    >
+                      <List size={14} className="mx-0.5" />
+                    </button>
+                  </div>
+
+                </div>
+              </div>
+
+              {(() => {
+                const filtered = clients.filter(client => {
+                  const matchesSearch = client.name.toLowerCase().includes(clientSearchTerm.toLowerCase()) || 
+                                        (client.planName || '').toLowerCase().includes(clientSearchTerm.toLowerCase());
+                  const isInactive = client.status && ['completed', 'cancelled'].includes(client.status);
+                  
+                  const matchesStatus = 
+                    clientFilterStatus === 'all' ||
+                    (clientFilterStatus === 'active' && !isInactive) ||
+                    (clientFilterStatus === 'inactive' && isInactive);
+
+                  const matchesAM = 
+                    selectedAMFilter === 'all' || 
+                    client.accountManagerId === selectedAMFilter;
+
+                  return matchesSearch && matchesStatus && matchesAM;
+                });
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="text-center py-16 bg-muted/10 border border-dashed border-border rounded-2xl p-6 animate-fade-in">
+                      <p className="text-sm text-muted-foreground italic">No se encontraron clientes con los filtros seleccionados.</p>
+                      {clientSearchTerm && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => setClientSearchTerm('')} 
+                          className="mt-3 text-xs"
+                        >
+                          Limpiar búsqueda
+                        </Button>
+                      )}
+                    </div>
+                  );
+                }
+
+                if (clientViewMode === 'table') {
+                  return (
+                    <div className="overflow-x-auto border border-border/40 rounded-2xl bg-card shadow-sm animate-fade-in">
+                      <table className="w-full border-collapse text-left text-xs text-foreground">
+                        <thead>
+                          <tr className="border-b border-border/20 bg-muted/40 font-bold text-muted-foreground text-[10px] uppercase tracking-wider">
+                            <th className="p-4 select-none">Cliente</th>
+                            <th className="p-4 select-none">Account Manager (AM)</th>
+                            <th className="p-4 select-none">Vigencia del Contrato</th>
+                            <th className="p-4 w-52 select-none">Progreso de Contrato</th>
+                            <th className="p-4 text-right select-none">Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/10">
+                          {filtered.map((client) => {
+                            const isInactive = client.status && ['completed', 'cancelled'].includes(client.status);
+                            const progress = calculateProgress(client.contractStartDate, client.contractEndDate);
+                            const assignedAM = allUsers.find(u => u.uid === client.accountManagerId);
+
+                            return (
+                              <tr 
+                                key={client.id}
+                                className="hover:bg-muted/30 transition-all group"
+                              >
+                                <td className="p-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs italic shrink-0 ${
+                                      isInactive 
+                                        ? 'bg-muted text-muted-foreground border border-border/20' 
+                                        : 'bg-primary/10 text-primary border border-primary/20'
+                                    }`}>
+                                      {client.name.substring(0, 2).toUpperCase()}
+                                    </div>
+                                    <div className="space-y-0.5">
+                                      <h4 className="font-bold text-sm text-foreground group-hover:text-primary transition-colors line-clamp-1">
+                                        {client.name}
+                                      </h4>
+                                      <span className="text-[9px] font-black uppercase text-muted-foreground px-1.5 py-0.5 rounded bg-muted leading-none inline-block">
+                                        PLAN: {client.planName || 'Standard'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </td>
+                                
+                                <td className="p-4">
+                                  {assignedAM ? (
+                                    <div className="flex items-center gap-2.5">
+                                      <div className="w-7 h-7 rounded-full overflow-hidden bg-primary/20 flex items-center justify-center shrink-0 border border-border/20">
+                                        {assignedAM.photoURL ? (
+                                          <img src={assignedAM.photoURL} alt={assignedAM.displayName} className="w-full h-full object-cover" referrerpolicy="no-referrer" />
+                                        ) : (
+                                          <span className="text-[10px] font-black text-primary">{assignedAM.displayName ? assignedAM.displayName.substring(0, 2).toUpperCase() : 'AM'}</span>
+                                        )}
+                                      </div>
+                                      <div>
+                                        <p className="font-bold text-xs text-foreground leading-tight">{assignedAM.displayName || assignedAM.username}</p>
+                                        <p className="text-[9px] text-muted-foreground leading-none">{getRoleLabel(assignedAM.role)}</p>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-1.5 text-muted-foreground italic">
+                                      <div className="w-7 h-7 rounded-full bg-muted/60 flex items-center justify-center shrink-0 border border-dashed border-border text-[9px] font-bold">
+                                        ?
+                                      </div>
+                                      <span className="text-xs">Sin asignar</span>
+                                    </div>
+                                  )}
+                                </td>
+                                
+                                <td className="p-4">
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-1.5 text-xs font-bold">
+                                      <span className="text-muted-foreground text-[10px]">Fin:</span>
+                                      <span>{client.contractEndDate ? client.contractEndDate.split('-').reverse().join('/') : '---'}</span>
+                                      <span className={`text-[8.5px] font-black px-1.5 py-0.5 rounded-full border uppercase ${
+                                        isInactive 
+                                          ? 'bg-rose-500/10 border-rose-500/20 text-rose-500' 
+                                          : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
+                                      }`}>
+                                        {isInactive ? 'Inactivo' : 'Activo'}
+                                      </span>
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground">
+                                      Vigencia: {getDurationString(client.contractStartDate, client.contractEndDate)}
+                                    </p>
+                                  </div>
+                                </td>
+                                
+                                <td className="p-4">
+                                  <div className="space-y-1 max-w-[180px]">
+                                    <div className="flex justify-between items-center text-[10px] font-bold">
+                                      <span className="text-muted-foreground text-[8px] uppercase">Progreso</span>
+                                      <span className="text-foreground font-mono">{progress}%</span>
+                                    </div>
+                                    <div className="w-full bg-muted-foreground/10 h-2 rounded-full overflow-hidden border border-border/10">
+                                      <div 
+                                        className={`h-full rounded-full transition-all duration-300 ${isInactive ? 'bg-muted-foreground/42' : 'bg-primary'}`} 
+                                        style={{ width: `${progress}%` }} 
+                                      />
+                                    </div>
+                                  </div>
+                                </td>
+                                
+                                <td className="p-4 text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button
+                                      onClick={() => handleOpenFicha(client)}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-muted hover:bg-emerald-500/10 hover:text-emerald-500 text-muted-foreground transition-all text-xs font-bold cursor-pointer"
+                                      title="Ver Ficha y Contrato"
+                                    >
+                                      📇 Ficha
+                                    </button>
+                                    <button
+                                      onClick={() => setSelectedClientId(client.id)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-muted hover:bg-primary hover:text-white text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-all text-xs font-bold cursor-pointer"
+                                    >
+                                      Ingresar ➜
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                }
+
+                // Grid view is default
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full pt-2 animate-fade-in">
+                    {filtered.map((client) => {
+                      const isInactive = client.status && ['completed', 'cancelled'].includes(client.status);
+                      const progress = calculateProgress(client.contractStartDate, client.contractEndDate);
+                      const assignedAM = allUsers.find(u => u.uid === client.accountManagerId);
+                      
+                      return (
+                        <div 
+                          key={client.id}
+                          className="flex flex-col justify-between p-5 rounded-[1.5rem] bg-card border border-border/40 hover:border-primary/40 transition-all text-left shadow-sm hover:shadow-md relative group overflow-hidden"
+                        >
+                          {/* Accent Color Strip for Visual Hierarchy */}
+                          <div className={`absolute top-0 left-0 right-0 h-[3px] ${isInactive ? 'bg-muted-foreground/35' : 'bg-primary'}`} />
+                          
+                          <div className="space-y-4">
+                            {/* Header Row */}
+                            <div className="flex items-start justify-between gap-2 pt-1">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs italic shrink-0 ${
+                                  isInactive 
+                                    ? 'bg-muted/80 text-muted-foreground border border-border/20' 
+                                    : 'bg-primary/10 text-primary border border-primary/20'
+                                }`}>
+                                  {client.name.substring(0, 2).toUpperCase()}
+                                </div>
+                                <div className="space-y-0.5">
+                                  <h4 className="font-bold text-sm text-foreground group-hover:text-primary transition-colors line-clamp-1">
+                                    {client.name}
+                                  </h4>
+                                  <span className="text-[9px] font-black uppercase text-muted-foreground px-1.5 py-0.5 rounded-md bg-muted leading-none inline-block">
+                                    PLAN: {client.planName || 'Standard'}
+                                  </span>
+                                </div>
+                              </div>
+                              
+                              {/* Status Badge */}
+                              <span className={`text-[8.5px] font-black px-2 py-0.5 rounded-full select-none leading-none border uppercase ${
+                                isInactive 
+                                  ? 'bg-rose-500/10 border-rose-500/20 text-rose-500' 
+                                  : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
+                              }`}>
+                                {isInactive ? 'Inactivo' : 'Activo'}
+                              </span>
+                            </div>
+
+                            {/* Contract Details */}
+                            <div className="space-y-2.5 bg-muted/30 p-3 rounded-xl border border-border/10 text-xs text-foreground">
+                              <div className="flex justify-between items-center text-[10px] text-muted-foreground">
+                                <span>Inicio: <strong className="text-foreground">{client.contractStartDate ? client.contractStartDate.split('-').reverse().join('/') : '---'}</strong></span>
+                                <span>Fin: <strong className="text-foreground">{client.contractEndDate ? client.contractEndDate.split('-').reverse().join('/') : '---'}</strong></span>
+                              </div>
+                              
+                              <div className="space-y-1">
+                                <div className="flex justify-between items-center text-[10px] font-bold">
+                                  <span className="text-muted-foreground uppercase text-[8.5px]">Progreso de Contrato</span>
+                                  <span className="text-foreground font-mono">{progress}%</span>
+                                </div>
+                                <div className="w-full bg-muted-foreground/10 h-2 rounded-full overflow-hidden border border-border/10">
+                                  <div 
+                                    className={`h-full rounded-full transition-all duration-300 ${isInactive ? 'bg-muted-foreground/42' : 'bg-primary'}`} 
+                                    style={{ width: `${progress}%` }} 
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Assigned AM Highlight section */}
+                            <div className="flex items-center gap-2 pt-2.5 border-t border-border/10 mt-1 justify-between text-xs">
+                              <span className="text-[9px] uppercase tracking-wider text-muted-foreground font-black">AM Asignado:</span>
+                              {assignedAM ? (
+                                <div className="flex items-center gap-1.5 bg-muted/40 px-2 py-1 rounded-lg border border-border/5">
+                                  <div className="w-5 h-5 rounded-full overflow-hidden bg-primary/20 flex items-center justify-center shrink-0">
+                                    {assignedAM.photoURL ? (
+                                      <img src={assignedAM.photoURL} alt={assignedAM.displayName} className="w-full h-full object-cover" referrerpolicy="no-referrer" />
+                                    ) : (
+                                      <span className="text-[10px] font-black text-primary">{assignedAM.displayName ? assignedAM.displayName.substring(0, 2).toUpperCase() : 'AM'}</span>
+                                    )}
+                                  </div>
+                                  <span className="text-[11px] font-bold text-foreground truncate max-w-[100px]">{assignedAM.displayName || assignedAM.username}</span>
+                                </div>
+                              ) : (
+                                <span className="text-[11px] text-muted-foreground italic">Sin asignar</span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Footer Action */}
+                          <div className="pt-4 mt-2 border-t border-border/10 flex items-center justify-between gap-1.5">
+                            <button
+                              onClick={() => handleOpenFicha(client)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-muted hover:bg-emerald-500/10 hover:text-emerald-500 text-muted-foreground transition-all text-xs font-semibold cursor-pointer shrink-0"
+                              title="Ver Ficha y Renovación"
+                            >
+                              📇 Ficha
+                            </button>
+                            <button
+                              onClick={() => setSelectedClientId(client.id)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-muted hover:bg-primary hover:text-white text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-all text-xs font-bold cursor-pointer"
+                            >
+                              Ingresar ➜
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          ) : (
+            <>
+              {activeTab === 'dashboard' && <DashboardStats profile={profile} isDemoMode={isDemoMode} clientId={selectedClientId} />}
+              {activeTab === 'templates' && selectedClient && (
+                <ClientTemplates client={selectedClient} isDemoMode={isDemoMode} />
+              )}
+              {activeTab === 'leads' && (
+                <LeadList 
+                  profile={profile} 
+                  isDemoMode={isDemoMode} 
+                  clientId={selectedClientId} 
+                  targetId={targetTaskId}
+                  onTargetProcessed={() => setTargetTaskId(null)}
+                  onLeadClick={handleOpenLeadDetails}
+                  initialViewMode={leadViewMode}
+                  clientHasSetter={clientHasSetter}
+                />
+              )}
+              {activeTab === 'meetings' && (
+                <MeetingAgenda 
+                  clientId={selectedClientId} 
+                  isDemoMode={isDemoMode} 
+                  profile={profile}
+                  targetId={targetTaskId}
+                  onTargetProcessed={() => setTargetTaskId(null)}
+                />
+              )}
+            </>
           )}
           {activeTab === 'settings' && (profile?.role === 'director' || profile?.role === 'account_manager' || profile?.role === 'commercial') && <UserManagement isDemoMode={isDemoMode} currentProfile={profile} />}
           {activeTab === 'team' && profile?.role !== 'client' && (profile?.role === 'director' || profile?.role === 'account_manager' || profile?.role === 'setter' || profile?.role === 'commercial') && (
@@ -2012,6 +2650,176 @@ export default function App() {
           clientHasSetter={clientHasSetter}
         />
       )}
+
+      {/* Diálogo de Ficha del Cliente y Renovación */}
+      <Dialog open={!!clientToViewFicha} onOpenChange={(open) => !open && setClientToViewFicha(null)}>
+        <DialogContent className="sm:max-w-[520px] bg-card border border-border text-card-foreground">
+          <DialogHeader className="mb-2">
+            <DialogTitle className="text-lg font-black uppercase tracking-tight text-foreground flex items-center gap-2">
+              <span className="p-1 rounded-lg bg-primary/10 text-primary text-base">
+                📇
+              </span>
+              Ficha del Cliente: {clientToViewFicha?.name}
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground text-xs uppercase font-bold tracking-wider">
+              Vigencia de contrato, planes activos y renovaciones.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 py-2 max-h-[60vh] sm:max-h-[65vh] overflow-y-auto pr-2 px-1 w-full min-w-0">
+            {/* Sección 1: Información General & Plan */}
+            <div className="grid grid-cols-2 gap-4 border-b border-border/10 pb-4">
+              <div className="space-y-1.5 col-span-2 sm:col-span-1">
+                <Label className="text-[10px] uppercase font-black tracking-wider text-muted-foreground">Plan del Cliente</Label>
+                <input
+                  type="text"
+                  value={editedPlanName}
+                  onChange={(e) => setEditedPlanName(e.target.value)}
+                  placeholder="Ej. Standard, Premium, Gold..."
+                  className="w-full px-3 py-1.5 h-9 text-xs rounded-lg border border-border bg-background text-foreground font-medium focus:ring-1 focus:ring-primary focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1.5 col-span-2 sm:col-span-1">
+                <Label className="text-[10px] uppercase font-black tracking-wider text-muted-foreground">Estado del Cliente</Label>
+                <div className="h-9 flex items-center bg-muted/35 px-3 border border-border rounded-lg text-xs font-bold text-foreground capitalize">
+                  {clientToViewFicha?.status || 'Activo'}
+                </div>
+              </div>
+            </div>
+
+            {/* Sección 2: Gestión de Contrato */}
+            <div className="space-y-3 pb-4 border-b border-border/10">
+              <h4 className="text-[11px] font-black uppercase tracking-wider text-primary flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5" />
+                Vigencia del Contrato
+              </h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground">Fecha Inicio</Label>
+                  <DatePicker 
+                    date={editedContractStartDate}
+                    setDate={(d) => setEditedContractStartDate(d || '')}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground">Fecha Fin</Label>
+                  <DatePicker 
+                    date={editedContractEndDate}
+                    setDate={(d) => setEditedContractEndDate(d || '')}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Sección 3: Renovaciones de Contrato (Destacado Verde) */}
+            <div className="space-y-4 bg-emerald-500/5 dark:bg-emerald-950/10 p-4 rounded-xl border border-emerald-500/10 dark:border-emerald-500/20">
+              <h4 className="text-[11px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                <RefreshCcw className="w-3.5 h-3.5" />
+                Historial de Renovaciones
+              </h4>
+
+              {/* Historial acumulado */}
+              <div className="flex items-center justify-between bg-background p-3 rounded-lg border border-border">
+                <span className="text-xs uppercase font-bold text-muted-foreground">Historial Acumulado:</span>
+                <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">
+                  {editedRenewalCount || 0} renovaciones
+                </span>
+              </div>
+
+              {/* Nueva fecha y Botón Confirmar */}
+              <div className="space-y-3 p-3 rounded-lg border border-emerald-500/10 dark:border-emerald-500/20 bg-background/50">
+                <Label className="text-[10px] uppercase font-bold text-foreground block">
+                  📅 ¿Se renovó el contrato? Selecciona hasta qué fecha y confírmalo:
+                </Label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-end">
+                  <div className="space-y-1">
+                    <Label className="text-[9px] uppercase font-semibold text-muted-foreground">Extender contrato hasta:</Label>
+                    <DatePicker 
+                      date={renewalExtendToDate}
+                      setDate={(d) => setRenewalExtendToDate(d || '')}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddRenewal}
+                    className="w-full text-xs h-9 font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] transition-all text-white dark:text-white rounded-lg flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-500/10 cursor-pointer border-none"
+                  >
+                    Confirmar Renovación
+                  </button>
+                </div>
+                <p className="text-[9px] text-muted-foreground leading-snug">
+                  Al confirmar la renovación con la fecha elegida, se incrementa el acumulado (+1), la fecha de finalización se actualiza automáticamente y el estado cambia a 'Sí, renueba'.
+                </p>
+              </div>
+
+              {/* ¿Se sabe si renueba el próximo período? */}
+              <div className="space-y-1 pt-1">
+                <Label className="text-[9px] uppercase font-bold text-muted-foreground">¿Se sabe si renueba el próximo período?</Label>
+                <select
+                  value={editedRenewalStatus}
+                  onChange={(e: any) => setEditedRenewalStatus(e.target.value)}
+                  className="w-full h-9 text-xs bg-background border border-border rounded-lg px-2.5 focus:ring-1 focus:ring-primary focus:outline-none text-foreground font-sans font-medium"
+                >
+                  <option value="unknown">Por decidir / En negociación</option>
+                  <option value="will_renew">Sí, renueba</option>
+                  <option value="will_not_renew">No renueba</option>
+                </select>
+              </div>
+
+              {editedRenewalStatus === "unknown" && (
+                <div className="space-y-1.5 pt-1">
+                  <Label className="text-[9px] uppercase font-bold text-muted-foreground">Fecha para volver a consultar</Label>
+                  <DatePicker
+                    date={editedContractReconsultDate}
+                    setDate={(d) => setEditedContractReconsultDate(d || '')}
+                    label="Elegir fecha de re-consulta"
+                  />
+                  <p className="text-[9px] text-muted-foreground leading-snug">
+                    La advertencia de vencimiento se ocultará automáticamente hasta esta fecha de forma transitoria.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Sección 4: Notas Persistentes */}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] uppercase font-black tracking-wider text-muted-foreground">Notas Internas & Renovación</Label>
+              <textarea
+                value={editedNotes}
+                onChange={(e) => setEditedNotes(e.target.value)}
+                placeholder="Agrega comentarios sobre el seguimiento o condiciones de renovación..."
+                rows={3}
+                className="w-full px-3 py-2 text-xs rounded-lg border border-border bg-background text-foreground font-medium focus:ring-1 focus:ring-primary focus:outline-none resize-none"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="mt-4">
+            <button
+              onClick={() => setClientToViewFicha(null)}
+              className="px-4 py-2 text-xs font-bold text-muted-foreground hover:text-foreground transition-all rounded-lg cursor-pointer bg-transparent border-none"
+              disabled={isSavingFicha}
+            >
+              Cerrar
+            </button>
+            <button
+              onClick={handleSaveFicha}
+              disabled={isSavingFicha}
+              className="px-5 py-2 text-xs font-black uppercase tracking-wider bg-primary text-primary-foreground hover:bg-primary/95 hover:shadow-lg transition-all rounded-lg flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 border-none h-9"
+            >
+              {isSavingFicha ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                'Guardar Ficha'
+              )}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Diálogo del Perfil de Usuario */}
       <Dialog open={isProfileModalOpen} onOpenChange={setIsProfileModalOpen}>

@@ -96,8 +96,8 @@ export default function ClientSelector({ selectedClientId, onClientChange, isDem
 
       setClients(clientsData);
       
-      // If no client selected and we have clients, select the first one
-      if (!selectedClientId && clientsData.length > 0) {
+      // Only auto-select first client if user does NOT have permission to view all clients (e.g. clients themselves)
+      if (!selectedClientId && clientsData.length > 0 && profile && !ROLE_PERMISSIONS[profile.role]?.canViewClients) {
         onClientChange(clientsData[0].id);
       }
     });
@@ -140,16 +140,24 @@ export default function ClientSelector({ selectedClientId, onClientChange, isDem
 
   return (
     <div className="flex items-center gap-2">
-      <Select value={selectedClientId} onValueChange={onClientChange}>
+      <Select 
+        value={selectedClientId || "__all_clients__"} 
+        onValueChange={(val) => onClientChange(val === "__all_clients__" ? "" : val)}
+      >
         <SelectTrigger className="w-[200px] h-9 bg-muted border-border shadow-none font-bold text-xs text-foreground">
           <div className="flex items-center gap-2 max-w-[170px]">
             <Briefcase size={14} className="text-primary shrink-0" />
             <SelectValue placeholder="Seleccionar Cliente">
-              {clients.find(c => c.id === selectedClientId)?.name || (selectedClientId ? "Cargando..." : "Seleccionar Cliente")}
+              {clients.find(c => c.id === selectedClientId)?.name || "📂 Todos los Clientes"}
             </SelectValue>
           </div>
         </SelectTrigger>
         <SelectContent className="bg-popover border-border">
+          {profile && ROLE_PERMISSIONS[profile.role]?.canViewClients && (
+            <SelectItem value="__all_clients__" className="text-xs font-bold focus:bg-primary/10 focus:text-primary pl-4 text-primary">
+              📂 Todos los Clientes (Ver panel)
+            </SelectItem>
+          )}
           {clients.length === 0 && (
             <div className="p-2 text-[10px] text-muted-foreground italic text-center">
               No hay clientes asignados

@@ -49,6 +49,8 @@ export default function FollowUpCenter({ profile, clientId, isDemoMode, onLeadCl
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'today' | 'pending' | 'completed'>('today');
   const [noteMap, setNoteMap] = useState<Record<string, string>>({});
+  const [nextDateMap, setNextDateMap] = useState<Record<string, string>>({});
+  const [stageMap, setStageMap] = useState<Record<string, 'setter' | 'commercial'>>({});
   const [schedulingFutureLead, setSchedulingFutureLead] = useState<Lead | null>(null);
   const [futureDate, setFutureDate] = useState<string>(format(addDays(new Date(), 7), 'yyyy-MM-dd'));
 
@@ -88,6 +90,10 @@ export default function FollowUpCenter({ profile, clientId, isDemoMode, onLeadCl
       lastActionAuthorId: profile?.uid || 'system',
     };
 
+    if (stageMap[lead.id]) {
+      updates.stage = stageMap[lead.id];
+    }
+
     const newFollowUp: FollowUp = {
       id: Math.random().toString(36).substr(2, 9),
       date: today,
@@ -105,9 +111,10 @@ export default function FollowUpCenter({ profile, clientId, isDemoMode, onLeadCl
       updates.lastAction = note || `Seguimiento Semanal #${nextSequence} realizado`;
       updates.followUpSequence = nextSequence;
 
-      if (nextSequence <= 3) {
-        // Move to next week
-        updates.nextFollowUpDate = format(addDays(new Date(), 7), 'yyyy-MM-dd');
+      const userSelectedDate = nextDateMap[lead.id];
+      if (userSelectedDate || nextSequence <= 3) {
+        // Use user selected date, or default to next 7 days (next week)
+        updates.nextFollowUpDate = userSelectedDate || format(addDays(new Date(), 7), 'yyyy-MM-dd');
       } else {
         // No more weeks in sequence
         updates.status = 'not-interested';
@@ -319,6 +326,47 @@ export default function FollowUpCenter({ profile, clientId, isDemoMode, onLeadCl
                         placeholder="¿Qué pasó en este contacto?"
                         className="w-full h-20 bg-muted/60 border border-border rounded-xl p-3 text-xs font-semibold focus:ring-2 focus:ring-primary/20 outline-none transition-all resize-none"
                       />
+                    </div>
+
+                    {/* Controles de Próximo Seguimiento y Etapa */}
+                    <div className="grid grid-cols-2 gap-3 bg-muted/20 p-2.5 rounded-xl border border-border/40" onClick={(e) => e.stopPropagation()}>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black text-muted-foreground uppercase tracking-wider block">
+                          Próxima Fecha
+                        </label>
+                        <div className="flex items-center gap-1">
+                          <DatePicker
+                            date={nextDateMap[lead.id] || ''}
+                            setDate={(date) => setNextDateMap(prev => ({ ...prev, [lead.id]: date }))}
+                            label="En 1 semana"
+                            className="h-8 text-[10px] font-bold rounded-lg w-full px-2"
+                          />
+                          {nextDateMap[lead.id] && (
+                            <button
+                              type="button"
+                              onClick={() => setNextDateMap(prev => ({ ...prev, [lead.id]: '' }))}
+                              className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors border border-border"
+                              title="Restablecer"
+                            >
+                              <XCircle size={12} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black text-muted-foreground uppercase tracking-wider block">
+                          Cambiar Etapa
+                        </label>
+                        <select
+                          value={stageMap[lead.id] || lead.stage || 'setter'}
+                          onChange={(e) => setStageMap(prev => ({ ...prev, [lead.id]: e.target.value as 'setter' | 'commercial' }))}
+                          className="w-full h-8 bg-background border border-border rounded-lg px-2 text-[10px] font-bold text-foreground focus:ring-1 focus:ring-primary outline-none transition-all cursor-pointer"
+                        >
+                          <option value="setter">Fase: Setter</option>
+                          <option value="commercial">Fase: Comercial</option>
+                        </select>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2" onClick={(e) => e.stopPropagation()}>

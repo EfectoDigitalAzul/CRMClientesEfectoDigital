@@ -108,6 +108,8 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [pitchTemplates, setPitchTemplates] = useState<PitchTemplate[]>([]);
   const [templatesEnabled, setTemplatesEnabled] = useState(false);
+  const [nextFollowUpDateInput, setNextFollowUpDateInput] = useState<string>('');
+  const [nextFollowUpStageInput, setNextFollowUpStageInput] = useState<'setter' | 'commercial'>('setter');
 
   useEffect(() => {
     setEditData({
@@ -120,6 +122,8 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
       interest: lead.interest,
       tag: lead.tag || ''
     });
+    setNextFollowUpStageInput(lead.stage || 'setter');
+    setNextFollowUpDateInput('');
   }, [lead]);
 
   useEffect(() => {
@@ -342,6 +346,24 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
         authorName: profile?.displayName || 'Usuario',
       };
 
+      let nextDateISOStr: string;
+      if (nextFollowUpDateInput) {
+        nextDateISOStr = new Date(nextFollowUpDateInput.replace(/-/g, '/')).toISOString();
+      } else {
+        const d = new Date();
+        d.setDate(d.getDate() + 7);
+        nextDateISOStr = d.toISOString();
+      }
+
+      const updates: Partial<Lead> = {
+        stage: nextFollowUpStageInput,
+        nextFollowUpDate: nextDateISOStr,
+        lastAction: `Seguimiento: ${newNote.substring(0, 30)}...`,
+        lastActionAuthorId: auth.currentUser?.uid || 'demo-user',
+        updatedAt: new Date().toISOString(),
+        status: ['new', 'contacted', 'reschedule'].includes(lead.status) ? 'follow-up' : lead.status
+      };
+
       if (isDemoMode) {
         const stored = localStorage.getItem('demo-leads');
         if (stored) {
@@ -354,10 +376,8 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
               ];
               return {
                 ...l,
-                followUps: newFollowUps,
-                lastAction: `Seguimiento: ${newNote.substring(0, 30)}...`,
-                updatedAt: new Date().toISOString(),
-                status: l.status === 'new' ? 'contacted' : l.status
+                ...updates,
+                followUps: newFollowUps
               };
             }
             return l;
@@ -368,14 +388,12 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
       } else {
         await addDoc(collection(db, 'leads', lead.id, 'followUps'), fu);
         await updateDoc(doc(db, 'leads', lead.id), {
-          lastAction: `Seguimiento: ${newNote.substring(0, 30)}...`,
-          lastActionAuthorId: auth.currentUser?.uid || 'demo-user',
-          updatedAt: new Date().toISOString(),
-          status: lead.status === 'new' ? 'contacted' : lead.status
+          ...updates,
         });
       }
 
       setNewNote('');
+      setNextFollowUpDateInput('');
       toast.success("Seguimiento registrado");
     } catch (error) {
       toast.error("Error al registrar seguimiento");
@@ -1019,6 +1037,48 @@ export default function LeadDetails({ lead, open, onOpenChange, profile, isDemoM
                   onChange={(e) => setNewNote(e.target.value)}
                   className="bg-muted/50 border-border rounded-xl focus:ring-primary/20 transition-all font-medium text-sm min-h-[90px]"
                 />
+
+                {/* Controles de Próximo Seguimiento y Etapa */}
+                <div className="grid grid-cols-2 gap-3 bg-muted/20 p-2.5 rounded-xl border border-border/40">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider block">
+                      Próxima Fecha
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <DatePicker
+                        date={nextFollowUpDateInput}
+                        setDate={setNextFollowUpDateInput}
+                        label="En 1 semana"
+                        className="h-8 text-[10px] font-bold rounded-lg w-full px-2"
+                      />
+                      {nextFollowUpDateInput && (
+                        <button
+                          type="button"
+                          onClick={() => setNextFollowUpDateInput('')}
+                          className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors border border-border bg-background"
+                          title="Restablecer"
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider block">
+                      Cambiar Etapa
+                    </label>
+                    <select
+                      value={nextFollowUpStageInput}
+                      onChange={(e) => setNextFollowUpStageInput(e.target.value as 'setter' | 'commercial')}
+                      className="w-full h-8 bg-background border border-border rounded-lg px-2 text-[10px] font-bold text-foreground focus:ring-1 focus:ring-primary outline-none transition-all cursor-pointer"
+                    >
+                      <option value="setter">Fase: Setter</option>
+                      <option value="commercial">Fase: Comercial</option>
+                    </select>
+                  </div>
+                </div>
+
                 <Button 
                   onClick={addFollowUp} 
                   className="w-full font-bold shadow-none bg-primary text-primary-foreground hover:bg-primary/90"

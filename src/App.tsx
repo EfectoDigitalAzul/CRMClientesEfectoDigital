@@ -2026,9 +2026,9 @@ export default function App() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6 pt-2">
+          <div className="space-y-6 pt-2 w-full min-w-0 overflow-hidden">
             {/* Vista Previa del Avatar */}
-            <div className="flex flex-col items-center justify-center gap-3 text-center mx-auto">
+            <div className="flex flex-col items-center justify-center gap-3 text-center w-full">
               <div className="relative group/avatar cursor-pointer">
                 <div className="h-24 w-24 overflow-hidden rounded-full border-4 border-primary/20 bg-muted relative flex items-center justify-center">
                   {editedPhotoURL ? (
@@ -2058,9 +2058,9 @@ export default function App() {
             </div>
 
             {/* Presets de Avatar */}
-            <div className="space-y-2">
+            <div className="space-y-2 w-full min-w-0 overflow-hidden">
               <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">O selecciona un avatar prediseñado</label>
-              <div className="flex gap-2 py-1 overflow-x-auto scrollbar-thin dark:scrollbar-thumb-neutral-800 scrollbar-thumb-neutral-200 pr-1">
+              <div className="flex gap-2 py-1 w-full min-w-0 overflow-x-auto scrollbar-thin dark:scrollbar-thumb-neutral-800 scrollbar-thumb-neutral-200 pr-1">
                 {PRESET_AVATARS.map((preset, idx) => {
                   const isSelected = editedPhotoURL === preset.url;
                   return (

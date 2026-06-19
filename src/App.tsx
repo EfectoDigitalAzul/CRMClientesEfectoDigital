@@ -132,10 +132,10 @@ export default function App() {
   const [targetTaskId, setTargetTaskId] = useState<string | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [clientSearchTerm, setClientSearchTerm] = useState('');
-  const [clientFilterStatus, setClientFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const [clientFilterStatus, setClientFilterStatus] = useState<'all' | 'active' | 'inactive' | 'last_month'>('all');
   const [selectedAMFilter, setSelectedAMFilter] = useState<string>('all');
   const [customRenewalEndDate, setCustomRenewalEndDate] = useState<string>('');
-  const [clientViewMode, setClientViewMode] = useState<'grid' | 'table'>('grid');
+  const [clientViewMode, setClientViewMode] = useState<'grid' | 'table'>('table');
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
 
   // States for Client Card & Renewal Card Dialog from the clients grid
@@ -148,7 +148,6 @@ export default function App() {
   const [editedContractReconsultDate, setEditedContractReconsultDate] = useState('');
   const [editedNotes, setEditedNotes] = useState('');
   const [isSavingFicha, setIsSavingFicha] = useState(false);
-  const [renewalExtendToDate, setRenewalExtendToDate] = useState('');
 
   const handleOpenFicha = (client: Client) => {
     setClientToViewFicha(client);
@@ -159,44 +158,20 @@ export default function App() {
     setEditedRenewalStatus(client.renewalStatus || 'unknown');
     setEditedContractReconsultDate(client.contractReconsultDate || '');
     setEditedNotes(client.notes || '');
-
-    // Set default extension end date to 1 month after current contract end date (or 1 month from now)
-    let nextDefaultDate = '';
-    const currentEnd = client.contractEndDate;
-    if (currentEnd) {
-      try {
-        const d = new Date(currentEnd.replace(/-/g, '/'));
-        d.setMonth(d.getMonth() + 1);
-        nextDefaultDate = d.toISOString().split('T')[0];
-      } catch (e) {
-        console.error(e);
-      }
-    } else {
-      const d = new Date();
-      d.setMonth(d.getMonth() + 1);
-      nextDefaultDate = d.toISOString().split('T')[0];
-    }
-    setRenewalExtendToDate(nextDefaultDate);
   };
 
-  const handleAddRenewal = () => {
-    if (!renewalExtendToDate) {
-      toast.error("Por favor, selecciona hasta qué fecha se extiende el contrato.");
-      return;
-    }
-    
-    setEditedRenewalCount(prev => prev + 1);
-    setEditedContractEndDate(renewalExtendToDate);
-    setEditedRenewalStatus('will_renew');
-    toast.success(`¡Renovación agregada! Se incrementó el acumulado, se extendió la finalización del contrato hasta el ${renewalExtendToDate} y se marcó como 'Sí, renueba'.`);
-
-    // Prepare the next default extension suggested date as 1 month after this newly set one
-    try {
-      const d = new Date(renewalExtendToDate.replace(/-/g, '/'));
-      d.setMonth(d.getMonth() + 1);
-      setRenewalExtendToDate(d.toISOString().split('T')[0]);
-    } catch (e) {
-      console.error(e);
+  const handleEndDateChange = (newDate: string) => {
+    setEditedContractEndDate(newDate);
+    // If the contract end date (vencimiento) is extended to a later date, we automatically register a renewal
+    if (clientToViewFicha && clientToViewFicha.contractEndDate && newDate) {
+      if (newDate > clientToViewFicha.contractEndDate) {
+        const diffCount = (clientToViewFicha.renewalCount || 0) + 1;
+        if (editedRenewalCount < diffCount) {
+          setEditedRenewalCount(diffCount);
+          setEditedRenewalStatus('will_renew');
+          toast.success(`Se detectó una extensión en la fecha de vencimiento: se incrementó el acumulado (+1) y se marcó como 'Sí, renueba'.`);
+        }
+      }
     }
   };
 
@@ -1255,7 +1230,7 @@ export default function App() {
       const diffTime = endDate.getTime() - now.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       
-      if (diffDays <= 7) {
+      if (diffDays <= 30) {
         return {
           diffDays,
           isExpired: diffDays < 0,
@@ -1810,7 +1785,7 @@ export default function App() {
               </PopoverContent>
             </Popover>
             
-            {isStaff && (
+            {isStaff && activeTab === 'leads' && (
               <Button onClick={() => setIsLeadFormOpen(true)} className="gap-2 font-semibold">
                 <Plus size={18} />
                 <span>Nuevo Lead</span>
@@ -1839,12 +1814,12 @@ export default function App() {
                     <h4 className="font-extrabold text-sm tracking-tight text-foreground">
                       {alert.isExpired 
                         ? `El período del contrato con ${selectedClient?.name} venció el ${alert.formattedDate}`
-                        : `El contrato con ${selectedClient?.name} termina pronto: el ${alert.formattedDate}`}
+                        : `El contrato con ${selectedClient?.name} termina pronto: el ${alert.formattedDate} (Inicia etapa de negociación)`}
                     </h4>
                     <p className="text-xs opacity-80 mt-1 text-muted-foreground">
                       {alert.isExpired 
                         ? `Expiró hace ${Math.abs(alert.diffDays)} ${Math.abs(alert.diffDays) === 1 ? 'día' : 'días'}.`
-                        : `Falta ${alert.diffDays} ${alert.diffDays === 1 ? 'día' : 'días'} para finalizar.`}
+                        : `Falta ${alert.diffDays} ${alert.diffDays === 1 ? 'día' : 'días'} para finalizar. Se recomienda iniciar negociaciones.`}
                       {" "}¿Está confirmada la renovación? 
                       <span className="ml-1 font-extrabold">
                         {alert.status === 'will_renew' && '✅ Sí, renovado'}
@@ -2201,8 +2176,8 @@ export default function App() {
                   </p>
                 </div>
                 
-                <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-                  <div className="relative">
+                <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 items-stretch sm:items-center">
+                  <div className="relative shrink-0">
                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                       type="text"
@@ -2221,10 +2196,10 @@ export default function App() {
                     )}
                   </div>
                   
-                  <div className="flex bg-muted/50 p-1 rounded-lg border border-border/10">
+                  <div className="flex bg-muted/50 p-1 rounded-lg border border-border/10 shrink-0 overflow-x-auto max-w-full no-scrollbar">
                     <button
                       onClick={() => setClientFilterStatus('all')}
-                      className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${
+                      className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all shrink-0 ${
                         clientFilterStatus === 'all'
                           ? 'bg-background text-foreground shadow-sm'
                           : 'text-muted-foreground hover:text-foreground'
@@ -2234,7 +2209,7 @@ export default function App() {
                     </button>
                     <button
                       onClick={() => setClientFilterStatus('active')}
-                      className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${
+                      className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all shrink-0 ${
                         clientFilterStatus === 'active'
                           ? 'bg-background text-foreground shadow-sm'
                           : 'text-muted-foreground hover:text-foreground'
@@ -2244,7 +2219,7 @@ export default function App() {
                     </button>
                     <button
                       onClick={() => setClientFilterStatus('inactive')}
-                      className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${
+                      className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all shrink-0 ${
                         clientFilterStatus === 'inactive'
                           ? 'bg-background text-foreground shadow-sm'
                           : 'text-muted-foreground hover:text-foreground'
@@ -2252,10 +2227,35 @@ export default function App() {
                     >
                       Inactivos ({clients.filter(c => c.status && ['completed', 'cancelled'].includes(c.status)).length})
                     </button>
+                    <button
+                      onClick={() => setClientFilterStatus('last_month')}
+                      className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-1 shrink-0 ${
+                        clientFilterStatus === 'last_month'
+                          ? 'bg-amber-500 text-white shadow-sm'
+                          : 'text-amber-500 hover:text-amber-600 bg-amber-500/5 hover:bg-amber-500/10'
+                      }`}
+                    >
+                      ⚠️ Por Vencer ({
+                        clients.filter(c => {
+                          const isInactive = c.status && ['completed', 'cancelled'].includes(c.status);
+                          if (isInactive || !c.contractEndDate) return false;
+                          try {
+                            const end = parseISO(c.contractEndDate);
+                            const now = new Date();
+                            now.setHours(0, 0, 0, 0);
+                            const diffTime = end.getTime() - now.getTime();
+                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                            return diffDays <= 30;
+                          } catch {
+                            return false;
+                          }
+                        }).length
+                      })
+                    </button>
                   </div>
 
                   {/* Account Manager Filter Dropdown */}
-                  <div className="flex bg-muted/50 p-1 rounded-lg border border-border/10 items-center">
+                  <div className="flex bg-muted/50 p-1 rounded-lg border border-border/10 items-center shrink-0">
                     <select
                       value={selectedAMFilter}
                       onChange={(e) => setSelectedAMFilter(e.target.value)}
@@ -2273,7 +2273,7 @@ export default function App() {
                   </div>
 
                   {/* View Mode Toggle */}
-                  <div className="flex bg-muted/50 p-1 rounded-lg border border-border/10">
+                  <div className="flex bg-muted/50 p-1 rounded-lg border border-border/10 shrink-0">
                     <button
                       onClick={() => setClientViewMode('grid')}
                       className={`p-1.5 rounded-md transition-all ${
@@ -2310,7 +2310,20 @@ export default function App() {
                   const matchesStatus = 
                     clientFilterStatus === 'all' ||
                     (clientFilterStatus === 'active' && !isInactive) ||
-                    (clientFilterStatus === 'inactive' && isInactive);
+                    (clientFilterStatus === 'inactive' && isInactive) ||
+                    (clientFilterStatus === 'last_month' && !isInactive && (() => {
+                      if (!client.contractEndDate) return false;
+                      try {
+                        const end = parseISO(client.contractEndDate);
+                        const now = new Date();
+                        now.setHours(0, 0, 0, 0);
+                        const diffTime = end.getTime() - now.getTime();
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        return diffDays <= 30;
+                      } catch {
+                        return false;
+                      }
+                    })());
 
                   const matchesAM = 
                     selectedAMFilter === 'all' || 
@@ -2346,7 +2359,8 @@ export default function App() {
                             <th className="p-4 select-none">Cliente</th>
                             <th className="p-4 select-none">Account Manager (AM)</th>
                             <th className="p-4 select-none">Vigencia del Contrato</th>
-                            <th className="p-4 w-52 select-none">Progreso de Contrato</th>
+                            <th className="p-4 w-44 select-none">Progreso de Contrato</th>
+                            <th className="p-4 select-none">Renovaciones & Estado</th>
                             <th className="p-4 text-right select-none">Acciones</th>
                           </tr>
                         </thead>
@@ -2356,23 +2370,48 @@ export default function App() {
                             const progress = calculateProgress(client.contractStartDate, client.contractEndDate);
                             const assignedAM = allUsers.find(u => u.uid === client.accountManagerId);
 
+                            const isLastMonth = (() => {
+                              if (isInactive || !client.contractEndDate) return false;
+                              try {
+                                const end = parseISO(client.contractEndDate);
+                                const now = new Date();
+                                now.setHours(0, 0, 0, 0);
+                                const diffTime = end.getTime() - now.getTime();
+                                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                return diffDays <= 30;
+                              } catch {
+                                return false;
+                              }
+                            })();
+
                             return (
                               <tr 
                                 key={client.id}
-                                className="hover:bg-muted/30 transition-all group"
+                                className={`transition-all group border-l-2 ${
+                                  isLastMonth 
+                                    ? 'bg-amber-500/[0.04] dark:bg-amber-500/[0.03] border-l-amber-500 border-b border-border/10 hover:bg-amber-500/[0.08] dark:hover:bg-amber-500/[0.06]' 
+                                    : 'hover:bg-muted/30 border-l-transparent border-b border-border/10'
+                                }`}
                               >
                                 <td className="p-4">
                                   <div className="flex items-center gap-3">
                                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs italic shrink-0 ${
                                       isInactive 
                                         ? 'bg-muted text-muted-foreground border border-border/20' 
-                                        : 'bg-primary/10 text-primary border border-primary/20'
+                                        : isLastMonth
+                                          ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                                          : 'bg-primary/10 text-primary border border-primary/20'
                                     }`}>
                                       {client.name.substring(0, 2).toUpperCase()}
                                     </div>
                                     <div className="space-y-0.5">
-                                      <h4 className="font-bold text-sm text-foreground group-hover:text-primary transition-colors line-clamp-1">
+                                      <h4 className="font-bold text-sm text-foreground group-hover:text-primary transition-colors flex items-center gap-1.5 line-clamp-1">
                                         {client.name}
+                                        {isLastMonth && (
+                                          <span className="animate-pulse px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 leading-none inline-block shrink-0" title="Último mes de contrato - ¡Iniciar Negociaciones!">
+                                            ⚠️ ÚLTIMO MES (NEGOCIACIÓN)
+                                          </span>
+                                        )}
                                       </h4>
                                       <span className="text-[9px] font-black uppercase text-muted-foreground px-1.5 py-0.5 rounded bg-muted leading-none inline-block">
                                         PLAN: {client.planName || 'Standard'}
@@ -2426,7 +2465,7 @@ export default function App() {
                                 </td>
                                 
                                 <td className="p-4">
-                                  <div className="space-y-1 max-w-[180px]">
+                                  <div className="space-y-1 max-w-[150px]">
                                     <div className="flex justify-between items-center text-[10px] font-bold">
                                       <span className="text-muted-foreground text-[8px] uppercase">Progreso</span>
                                       <span className="text-foreground font-mono">{progress}%</span>
@@ -2437,6 +2476,35 @@ export default function App() {
                                         style={{ width: `${progress}%` }} 
                                       />
                                     </div>
+                                  </div>
+                                </td>
+
+                                <td className="p-4">
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded flex items-center gap-1 leading-none shrink-0" title="Renovaciones acumuladas">
+                                        🔄 {client.renewalCount || 0}
+                                      </span>
+                                      {client.renewalStatus === 'will_renew' && (
+                                        <span className="text-[9px] font-extrabold uppercase bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded leading-none shrink-0">Sí, renueba ✅</span>
+                                      )}
+                                      {client.renewalStatus === 'will_not_renew' && (
+                                        <span className="text-[9px] font-extrabold uppercase bg-rose-500/10 text-rose-600 dark:text-rose-400 px-1.5 py-0.5 rounded leading-none shrink-0">No renueba ❌</span>
+                                      )}
+                                      {(!client.renewalStatus || client.renewalStatus === 'unknown') && (
+                                        <span className="text-[9px] font-extrabold uppercase bg-amber-500/10 text-amber-600 dark:text-amber-500 px-1.5 py-0.5 rounded leading-none shrink-0 font-sans">Negociación ⏳</span>
+                                      )}
+                                    </div>
+                                    {client.renewalStatus === 'unknown' && client.contractReconsultDate && (
+                                      <p className="text-[9px] text-muted-foreground leading-normal font-sans mt-0.5">
+                                        Volver a consultar: <span className="font-extrabold text-foreground">{client.contractReconsultDate.split('-').reverse().join('/')}</span>
+                                      </p>
+                                    )}
+                                    {client.notes && (
+                                      <p className="text-[9.5px] italic text-muted-foreground max-w-[180px] truncate leading-none mt-0.5" title={client.notes}>
+                                        💬 {client.notes}
+                                      </p>
+                                    )}
                                   </div>
                                 </td>
                                 
@@ -2473,29 +2541,60 @@ export default function App() {
                       const isInactive = client.status && ['completed', 'cancelled'].includes(client.status);
                       const progress = calculateProgress(client.contractStartDate, client.contractEndDate);
                       const assignedAM = allUsers.find(u => u.uid === client.accountManagerId);
+
+                      const isLastMonth = (() => {
+                        if (isInactive || !client.contractEndDate) return false;
+                        try {
+                          const end = parseISO(client.contractEndDate);
+                          const now = new Date();
+                          now.setHours(0, 0, 0, 0);
+                          const diffTime = end.getTime() - now.getTime();
+                          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                          return diffDays <= 30;
+                        } catch {
+                          return false;
+                        }
+                      })();
                       
                       return (
                         <div 
                           key={client.id}
-                          className="flex flex-col justify-between p-5 rounded-[1.5rem] bg-card border border-border/40 hover:border-primary/40 transition-all text-left shadow-sm hover:shadow-md relative group overflow-hidden"
+                          className={`flex flex-col justify-between p-5 rounded-[1.5rem] bg-card border transition-all text-left shadow-sm hover:shadow-md relative group overflow-hidden ${
+                            isLastMonth 
+                              ? 'border-amber-500/60 shadow-amber-500/5 bg-amber-500/[0.01]/7 hover:border-amber-500' 
+                              : 'border-border/40 hover:border-primary/40'
+                          }`}
                         >
                           {/* Accent Color Strip for Visual Hierarchy */}
-                          <div className={`absolute top-0 left-0 right-0 h-[3px] ${isInactive ? 'bg-muted-foreground/35' : 'bg-primary'}`} />
+                          <div className={`absolute top-0 left-0 right-0 h-[3px] ${
+                            isInactive 
+                              ? 'bg-muted-foreground/35' 
+                              : isLastMonth
+                                ? 'bg-amber-500'
+                                : 'bg-primary'
+                          }`} />
                           
                           <div className="space-y-4">
                             {/* Header Row */}
-                            <div className="flex items-start justify-between gap-2 pt-1">
+                            <div className="flex items-start justify-between gap-2 pt-1 font-sans">
                               <div className="flex items-center gap-3">
                                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs italic shrink-0 ${
                                   isInactive 
                                     ? 'bg-muted/80 text-muted-foreground border border-border/20' 
-                                    : 'bg-primary/10 text-primary border border-primary/20'
+                                    : isLastMonth
+                                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                                      : 'bg-primary/10 text-primary border border-primary/20'
                                 }`}>
                                   {client.name.substring(0, 2).toUpperCase()}
                                 </div>
                                 <div className="space-y-0.5">
-                                  <h4 className="font-bold text-sm text-foreground group-hover:text-primary transition-colors line-clamp-1">
+                                  <h4 className="font-bold text-sm text-foreground group-hover:text-primary transition-colors flex items-center gap-1.5 flex-wrap">
                                     {client.name}
+                                    {isLastMonth && (
+                                      <span className="animate-pulse px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 leading-none inline-block shrink-0" title="Último mes de contrato - ¡Iniciar Negociaciones!">
+                                        ⚠️ Último mes
+                                      </span>
+                                    )}
                                   </h4>
                                   <span className="text-[9px] font-black uppercase text-muted-foreground px-1.5 py-0.5 rounded-md bg-muted leading-none inline-block">
                                     PLAN: {client.planName || 'Standard'}
@@ -2532,6 +2631,49 @@ export default function App() {
                                   />
                                 </div>
                               </div>
+                            </div>
+
+                            {/* Info de Renovación (Sincronizado con la Ficha) */}
+                            <div className="p-3 bg-emerald-500/5 dark:bg-emerald-950/10 rounded-xl border border-emerald-500/10 text-xs space-y-1.5">
+                              <div className="flex items-center justify-between text-[10px]">
+                                <span className="font-extrabold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                                  🔄 Renovaciones Acumuladas:
+                                </span>
+                                <span className="font-black text-emerald-600 dark:text-emerald-400">
+                                  {client.renewalCount || 0}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-muted-foreground font-medium">Estado de renovación:</span>
+                                {client.renewalStatus === 'will_renew' && (
+                                  <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[9px] font-extrabold uppercase px-2 py-0.5 rounded">
+                                    Sí, renueba ✅
+                                  </span>
+                                )}
+                                {client.renewalStatus === 'will_not_renew' && (
+                                  <span className="bg-rose-500/10 text-rose-600 dark:text-rose-400 text-[9px] font-extrabold uppercase px-2 py-0.5 rounded">
+                                    No renueba ❌
+                                  </span>
+                                )}
+                                {(!client.renewalStatus || client.renewalStatus === 'unknown') && (
+                                  <span className="bg-amber-500/10 text-amber-600 dark:text-amber-500 text-[9px] font-extrabold uppercase px-2 py-0.5 rounded">
+                                    En negociación ⏳
+                                  </span>
+                                )}
+                              </div>
+                              {client.renewalStatus === 'unknown' && client.contractReconsultDate && (
+                                <div className="text-[9px] text-muted-foreground flex justify-between pt-1 border-t border-border/10">
+                                  <span>Volver a consultar:</span>
+                                  <span className="font-extrabold text-foreground">
+                                    {client.contractReconsultDate.split('-').reverse().join('/')}
+                                  </span>
+                                </div>
+                              )}
+                              {client.notes && (
+                                <p className="text-[9.5px] italic text-muted-foreground line-clamp-1 border-t border-border/10 pt-1 mt-1 leading-normal" title={client.notes}>
+                                  💬 {client.notes}
+                                </p>
+                              )}
                             </div>
 
                             {/* Assigned AM Highlight section */}
@@ -2703,59 +2845,57 @@ export default function App() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] uppercase font-bold text-muted-foreground">Fecha Fin</Label>
+                  <Label className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">Fecha Fin / Vencimiento</Label>
                   <DatePicker 
                     date={editedContractEndDate}
-                    setDate={(d) => setEditedContractEndDate(d || '')}
+                    setDate={(d) => handleEndDateChange(d || '')}
                   />
                 </div>
               </div>
             </div>
 
-            {/* Sección 3: Renovaciones de Contrato (Destacado Verde) */}
-            <div className="space-y-4 bg-emerald-500/5 dark:bg-emerald-950/10 p-4 rounded-xl border border-emerald-500/10 dark:border-emerald-500/20">
+            {/* Sección 3: Historial & Estado de Renovación */}
+            <div className="space-y-3 bg-emerald-500/5 dark:bg-emerald-950/10 p-4 rounded-xl border border-emerald-500/10 dark:border-emerald-500/20">
               <h4 className="text-[11px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                 <RefreshCcw className="w-3.5 h-3.5" />
                 Historial de Renovaciones
               </h4>
 
-              {/* Historial acumulado */}
+              {/* Historial acumulado con botones de control */}
               <div className="flex items-center justify-between bg-background p-3 rounded-lg border border-border">
-                <span className="text-xs uppercase font-bold text-muted-foreground">Historial Acumulado:</span>
-                <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">
-                  {editedRenewalCount || 0} renovaciones
-                </span>
-              </div>
-
-              {/* Nueva fecha y Botón Confirmar */}
-              <div className="space-y-3 p-3 rounded-lg border border-emerald-500/10 dark:border-emerald-500/20 bg-background/50">
-                <Label className="text-[10px] uppercase font-bold text-foreground block">
-                  📅 ¿Se renovó el contrato? Selecciona hasta qué fecha y confírmalo:
-                </Label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-end">
-                  <div className="space-y-1">
-                    <Label className="text-[9px] uppercase font-semibold text-muted-foreground">Extender contrato hasta:</Label>
-                    <DatePicker 
-                      date={renewalExtendToDate}
-                      setDate={(d) => setRenewalExtendToDate(d || '')}
-                    />
-                  </div>
+                <div className="space-y-0.5">
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground block">Historial Acumulado:</span>
+                  <span className="text-[9px] font-semibold text-muted-foreground block">
+                    Se incrementa automáticamente al extender la fecha de vencimiento.
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
-                    onClick={handleAddRenewal}
-                    className="w-full text-xs h-9 font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] transition-all text-white dark:text-white rounded-lg flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-500/10 cursor-pointer border-none"
+                    onClick={() => setEditedRenewalCount(prev => Math.max(0, prev - 1))}
+                    className="h-8 w-8 rounded-lg bg-muted text-foreground flex items-center justify-center font-bold text-sm border-none cursor-pointer hover:bg-muted/80"
                   >
-                    Confirmar Renovación
+                    -
+                  </button>
+                  <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 w-10 text-center">
+                    {editedRenewalCount || 0}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditedRenewalCount(prev => prev + 1);
+                      setEditedRenewalStatus('will_renew');
+                    }}
+                    className="h-8 w-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-sm border-none cursor-pointer hover:bg-emerald-700"
+                  >
+                    +
                   </button>
                 </div>
-                <p className="text-[9px] text-muted-foreground leading-snug">
-                  Al confirmar la renovación con la fecha elegida, se incrementa el acumulado (+1), la fecha de finalización se actualiza automáticamente y el estado cambia a 'Sí, renueba'.
-                </p>
               </div>
 
               {/* ¿Se sabe si renueba el próximo período? */}
               <div className="space-y-1 pt-1">
-                <Label className="text-[9px] uppercase font-bold text-muted-foreground">¿Se sabe si renueba el próximo período?</Label>
+                <Label className="text-[9px] uppercase font-bold text-muted-foreground block">¿Se sabe si renueba el próximo período?</Label>
                 <select
                   value={editedRenewalStatus}
                   onChange={(e: any) => setEditedRenewalStatus(e.target.value)}

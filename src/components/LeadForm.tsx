@@ -312,7 +312,7 @@ export default function LeadForm({ open, onOpenChange, isDemoMode, clientId, lea
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.contactInfo) {
+    if (!formData.name?.trim() || !formData.contactInfo?.trim()) {
       toast.error("Por favor completa los campos obligatorios");
       return;
     }
@@ -400,6 +400,7 @@ export default function LeadForm({ open, onOpenChange, isDemoMode, clientId, lea
               <div className="flex gap-2">
                 <Input 
                   id="linkedin" 
+                  maxLength={300}
                   value={linkedinUrl} 
                   onChange={(e) => setLinkedinUrl(e.target.value)} 
                   placeholder="https://www.linkedin.com/in/usuario/"
@@ -527,6 +528,7 @@ export default function LeadForm({ open, onOpenChange, isDemoMode, clientId, lea
               <Label htmlFor="name" className="text-foreground font-medium">Nombre Completo *</Label>
               <Input 
                 id="name" 
+                maxLength={100}
                 value={formData.name} 
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })} 
                 placeholder="Ej: Juan Pérez"
@@ -537,6 +539,7 @@ export default function LeadForm({ open, onOpenChange, isDemoMode, clientId, lea
               <Label htmlFor="company" className="text-foreground font-medium">Empresa</Label>
               <Input 
                 id="company" 
+                maxLength={100}
                 value={formData.company} 
                 onChange={(e) => setFormData({ ...formData, company: e.target.value })} 
                 placeholder="Ej: Tech Solutions"
@@ -550,6 +553,7 @@ export default function LeadForm({ open, onOpenChange, isDemoMode, clientId, lea
               <Label htmlFor="contactInfo" className="text-foreground font-medium">Email o Teléfono *</Label>
               <Input 
                 id="contactInfo" 
+                maxLength={200}
                 value={formData.contactInfo} 
                 onChange={(e) => {
                   const val = e.target.value;
@@ -567,6 +571,7 @@ export default function LeadForm({ open, onOpenChange, isDemoMode, clientId, lea
               <Label htmlFor="country" className="text-foreground font-medium">País</Label>
               <Input 
                 id="country" 
+                maxLength={60}
                 value={formData.country} 
                 onChange={(e) => setFormData({ ...formData, country: e.target.value })} 
                 placeholder="Ej: Argentina"
@@ -579,6 +584,7 @@ export default function LeadForm({ open, onOpenChange, isDemoMode, clientId, lea
             <Label htmlFor="interest" className="text-foreground font-medium">Interés / Necesidad</Label>
             <Input 
               id="interest" 
+              maxLength={200}
               value={formData.interest} 
               onChange={(e) => setFormData({ ...formData, interest: e.target.value })} 
               placeholder="Ej: Software de gestión"

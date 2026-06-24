@@ -127,6 +127,8 @@ export default function App() {
   }, [isDemoMode]);
 
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loginAttempts, setLoginAttempts] = useState(0);
+  const [loginCooldown, setLoginCooldown] = useState(false);
   const [isLeadFormOpen, setIsLeadFormOpen] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [targetTaskId, setTargetTaskId] = useState<string | null>(null);
@@ -966,6 +968,10 @@ export default function App() {
   const handleCredentialLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!credentials.username || !credentials.password) return;
+    if (loginCooldown) {
+      toast.error("Demasiados intentos fallidos. Esperá 30 segundos antes de reintentar.");
+      return;
+    }
     setIsLoggingIn(true);
     
     try {
@@ -1091,9 +1097,11 @@ export default function App() {
           }
         } else {
           toast.error("Usuario o contraseña incorrectos");
+          setLoginAttempts(prev => { const next = prev + 1; if (next >= 5) { setLoginCooldown(true); setTimeout(() => { setLoginCooldown(false); setLoginAttempts(0); }, 30000); } return next; });
         }
       } else {
         toast.error("Usuario o contraseña incorrectos");
+          setLoginAttempts(prev => { const next = prev + 1; if (next >= 5) { setLoginCooldown(true); setTimeout(() => { setLoginCooldown(false); setLoginAttempts(0); }, 30000); } return next; });
       }
     } catch (error) {
       toast.error("Error al iniciar sesión");
@@ -1135,6 +1143,7 @@ export default function App() {
                       type="text"
                       placeholder="ej: naza_efecto" 
                       className="w-full bg-black/40 border border-white/10 rounded-xl px-12 h-12 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all font-medium"
+                      maxLength={100}
                       value={credentials.username}
                       onChange={e => setCredentials({...credentials, username: e.target.value})}
                     />
@@ -1150,6 +1159,7 @@ export default function App() {
                       type="password"
                       placeholder="••••••••" 
                       className="w-full bg-black/40 border border-white/10 rounded-xl px-12 h-12 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all font-medium"
+                      maxLength={128}
                       value={credentials.password}
                       onChange={e => setCredentials({...credentials, password: e.target.value})}
                     />

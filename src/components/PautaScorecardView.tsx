@@ -466,6 +466,34 @@ export function PautaScorecardView({
     }
   };
 
+  // Quick Activate Pauta Service
+  const handleQuickActivatePauta = async () => {
+    try {
+      const updatedClient: Client = {
+        ...client,
+        hasPautaService: true,
+        pautaCurrency: client.pautaCurrency || 'ARS',
+      };
+
+      if (isDemoMode) {
+        const stored = localStorage.getItem('demo-clients');
+        const demoClients = stored ? JSON.parse(stored) : [];
+        const updatedList = demoClients.map((c: any) => c.id === client.id ? updatedClient : c);
+        localStorage.setItem('demo-clients', JSON.stringify(updatedList));
+        window.dispatchEvent(new CustomEvent('demo-clients-updated'));
+      } else {
+        await setDoc(doc(db, 'clients', client.id), updatedClient, { merge: true });
+      }
+
+      if (onUpdateClient) {
+        onUpdateClient(updatedClient);
+      }
+      toast.success("¡Servicio de Pauta activado exitosamente para este cliente!");
+    } catch (e: any) {
+      toast.error(`Error al activar pauta: ${e.message || e}`);
+    }
+  };
+
   // Save Client Meta Settings
   const handleSaveSettings = async () => {
     try {
@@ -854,6 +882,15 @@ _Generado automáticamente desde la plataforma Efecto Digital_`;
               <Megaphone size={11} />
               SCORECARD DE PAUTA
             </span>
+            {client.hasPautaService ? (
+              <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold text-[9px] uppercase flex items-center gap-1 border border-emerald-500/20">
+                ✓ Servicio Activo
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold text-[9px] uppercase flex items-center gap-1 border border-amber-500/20">
+                ⚠️ Servicio Desactivado
+              </span>
+            )}
             {client.metaAdAccountId && (
               <span className="px-2 py-0.5 rounded-md bg-blue-600/15 text-blue-600 dark:text-blue-400 font-bold text-[9px] uppercase flex items-center gap-1 border border-blue-600/20">
                 <Link2 size={10} />
@@ -957,6 +994,40 @@ _Generado automáticamente desde la plataforma Efecto Digital_`;
           </Button>
         </div>
       </div>
+
+      {/* Direct In-View Activation Banner if Pauta is not yet active */}
+      {!client.hasPautaService && (
+        <div className="p-5 rounded-2xl bg-gradient-to-r from-red-500/10 via-amber-500/10 to-red-500/5 border-2 border-dashed border-red-500/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-fade-in shadow-sm">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">📢</span>
+              <h3 className="text-sm sm:text-base font-black text-foreground uppercase tracking-tight">
+                El servicio de Pauta Publicitaria está desactivado para este cliente
+              </h3>
+            </div>
+            <p className="text-xs text-muted-foreground max-w-2xl leading-relaxed">
+              Al activarlo, se guardará en la ficha del cliente, permitiendo el cálculo de CPL, métricas de pauta en el panel general y la sincronización con Meta Ads.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 w-full md:w-auto shrink-0">
+            <Button
+              onClick={handleQuickActivatePauta}
+              className="bg-red-600 hover:bg-red-700 text-white font-black text-xs gap-2 px-5 py-2.5 h-auto shadow-md cursor-pointer w-full md:w-auto"
+            >
+              <Megaphone size={15} />
+              Activar Servicio de Pauta Ahora
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsSettingsOpen(true)}
+              className="bg-background text-foreground font-bold text-xs px-3 py-2.5 h-auto border-border"
+              title="Ajustar Moneda, CPL y Meta Account ID"
+            >
+              <Settings size={14} />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* KPI Cards Overview */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">

@@ -174,6 +174,7 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
   const [selectedSharedAMsForNewClient, setSelectedSharedAMsForNewClient] = useState<string[]>([]);
   const [newClientStartDate, setNewClientStartDate] = useState('');
   const [newClientEndDate, setNewClientEndDate] = useState('');
+  const [newClientHasPauta, setNewClientHasPauta] = useState(false);
   const [newClientStatus, setNewClientStatus] = useState<ClientStatus>('onboarding');
   const [creating, setCreating] = useState(false);
   const [deleteConfirmClient, setDeleteConfirmClient] = useState<{ id: string; name: string } | null>(null);
@@ -469,6 +470,8 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
         availableTags: tags,
         contractStartDate: newClientStartDate || null,
         contractEndDate: newClientEndDate || null,
+        hasPautaService: newClientHasPauta,
+        pautaCurrency: 'ARS' as const,
         createdAt: new Date().toISOString(),
       };
 
@@ -1240,6 +1243,18 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
                 />
               </div>
             </div>
+            <div className="flex items-center gap-2 pt-1">
+              <input 
+                type="checkbox" 
+                id="newClientHasPauta" 
+                checked={newClientHasPauta} 
+                onChange={e => setNewClientHasPauta(e.target.checked)} 
+                className="h-4 w-4 rounded border-border bg-background text-red-600 focus:ring-red-500"
+              />
+              <Label htmlFor="newClientHasPauta" className="text-xs font-bold text-foreground cursor-pointer flex items-center gap-1">
+                📢 ¿Activar Servicio de Pauta & Meta Ads para este cliente?
+              </Label>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsNewClientOpen(false)} className="border-border text-foreground hover:bg-muted">Cancelar</Button>
@@ -1549,6 +1564,18 @@ export default function TeamView({ onClientSelect, onTabChange, isDemoMode, prof
                   className="h-4 w-4 rounded border-border bg-background text-primary"
                 />
                 <Label htmlFor="templatesEnabledEdit" className="text-xs font-bold text-foreground cursor-pointer">¿Habilitar plantillas de seguimiento/mensajes para este cliente?</Label>
+              </div>
+              <div className="flex items-center gap-2 pt-2 col-span-2">
+                <input 
+                  type="checkbox" 
+                  id="hasPautaServiceEdit" 
+                  checked={editingClient?.hasPautaService || false} 
+                  onChange={e => setEditingClient(editingClient ? {...editingClient, hasPautaService: e.target.checked} : null)}
+                  className="h-4 w-4 rounded border-border bg-background text-red-600 focus:ring-red-500"
+                />
+                <Label htmlFor="hasPautaServiceEdit" className="text-xs font-bold text-foreground cursor-pointer flex items-center gap-1">
+                  📢 ¿Tiene Servicio de Pauta & Meta Ads activo?
+                </Label>
               </div>
             </div>
 

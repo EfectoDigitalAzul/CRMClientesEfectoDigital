@@ -1448,6 +1448,14 @@ export default function App() {
                       onClick={() => { setActiveTab('templates'); setIsMobileMenuOpen(false); }} 
                     />
                   )}
+                  {(selectedClient.hasPautaService || isStaff) && (
+                    <SidebarItem 
+                      icon={<Megaphone size={18} />} 
+                      label="Pauta & Scorecard" 
+                      active={activeTab === 'pauta'} 
+                      onClick={() => { setActiveTab('pauta'); setIsMobileMenuOpen(false); }} 
+                    />
+                  )}
                 </div>
               )}
 
@@ -1612,7 +1620,7 @@ export default function App() {
                         onClick={() => setActiveTab('templates')} 
                       />
                     )}
-                    {selectedClient.hasPautaService && (
+                    {(selectedClient.hasPautaService || isStaff) && (
                       <SidebarItem 
                         icon={<Megaphone size={18} />} 
                         label="Pauta & Scorecard" 
@@ -1753,6 +1761,19 @@ export default function App() {
             )}
           </div>
           <div className="flex items-center gap-4">
+            {isStaff && selectedClient && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleOpenFicha(selectedClient)}
+                className="gap-1.5 px-3 h-9 font-bold bg-card border-border text-foreground hover:bg-emerald-500/10 hover:text-emerald-500 hover:border-emerald-500/30 text-xs shadow-sm transition-all flex items-center shrink-0"
+                title="Editar Ficha, Renovación y Servicio de Pauta"
+              >
+                <span>📇</span>
+                <span className="hidden sm:inline">Ficha Cliente</span>
+              </Button>
+            )}
+
             <Button
               variant="ghost"
               size="icon"
@@ -2142,6 +2163,39 @@ export default function App() {
                         className="bg-emerald-500 h-full rounded-full transition-all duration-300" 
                         style={{ width: `${calculateProgress(selectedClient.contractStartDate, selectedClient.contractEndDate)}%` }} 
                       />
+                    </div>
+                  </div>
+
+                  {/* Pauta & Meta Ads Widget */}
+                  <div className={`p-4 rounded-2xl border flex flex-col justify-center min-w-[155px] ${
+                    selectedClient.hasPautaService 
+                      ? 'bg-red-500/10 border-red-500/20' 
+                      : 'bg-muted/35 border-border/15'
+                  }`}>
+                    <span className="text-[8px] font-black uppercase tracking-widest mb-1 flex items-center gap-1 text-red-600 dark:text-red-400">
+                      <Megaphone size={10} />
+                      Pauta & Meta Ads
+                    </span>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-black text-foreground leading-none">
+                        {selectedClient.hasPautaService ? (
+                          <span className="text-red-600 dark:text-red-400 font-extrabold flex items-center gap-1">
+                            Activo {selectedClient.pautaTargetCPL ? `($${selectedClient.pautaTargetCPL})` : '✓'}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground font-semibold">No activado</span>
+                        )}
+                      </span>
+                      <button
+                        onClick={() => setActiveTab('pauta')}
+                        className={`text-[9px] font-black uppercase px-2 py-1 rounded-md transition-all cursor-pointer border-none ${
+                          selectedClient.hasPautaService
+                            ? 'bg-red-600 hover:bg-red-700 text-white'
+                            : 'bg-primary hover:bg-primary/90 text-primary-foreground'
+                        }`}
+                      >
+                        {selectedClient.hasPautaService ? 'Ver Planilla' : 'Activar Pauta'}
+                      </button>
                     </div>
                   </div>
 

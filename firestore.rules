@@ -127,6 +127,11 @@ service cloud.firestore {
         allow update: if isDirector() || (isSignedIn() && resource.data.authorId == request.auth.uid);
         allow delete: if isDirector();
       }
+
+      match /pautaScorecards/{scorecardId} {
+        allow read: if isSignedIn() && canAccessClient(get(/databases/$(database)/documents/clients/$(clientId)).data);
+        allow write: if isSignedIn() && isStaffMember();
+      }
     }
 
     // Leads

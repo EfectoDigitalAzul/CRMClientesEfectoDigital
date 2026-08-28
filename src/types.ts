@@ -83,9 +83,56 @@ export interface Client {
   targetLeads?: number;
   templatesEnabled?: boolean;
   pitchTemplates?: PitchTemplate[];
+  // Pauta & Paid Media Service fields
+  hasPautaService?: boolean;
+  metaAdAccountId?: string;
+  metaAccessToken?: string;
+  pautaTargetCPL?: number;
+  pautaCurrency?: 'ARS' | 'USD' | 'EUR' | 'MXN' | 'CLP' | 'COP';
+  pautaTargetWeeklyLeads?: number;
   isDeleted?: boolean;
   deletedAt?: string;
   deletedBy?: string;
+}
+
+export interface PautaWeekData {
+  startDate?: string;
+  endDate?: string;
+  // Campañas de form
+  formSpend: number;
+  formLeads: number;
+  formContacted: number;
+  formOpportunities: number;
+  formMeetings: number;
+  formSales: number;
+  // Campañas de wpp
+  wppSpend: number;
+  wppLeads: number;
+  wppContacted: number;
+  wppOpportunities: number;
+  wppMeetings: number; // or visitas pactadas
+  wppSales: number;
+  // Meta sync tracking
+  syncedWithMeta?: boolean;
+  lastMetaSync?: string;
+  notes?: string;
+}
+
+export interface PautaScorecard {
+  id: string; // e.g. "2026-06"
+  clientId: string;
+  month: number; // 1 - 12
+  year: number; // e.g. 2026
+  weeks: {
+    week1: PautaWeekData;
+    week2: PautaWeekData;
+    week3: PautaWeekData;
+    week4: PautaWeekData;
+  };
+  notes?: string;
+  createdAt?: string;
+  updatedAt: string;
+  updatedBy?: string;
 }
 
 export interface PitchTemplate {

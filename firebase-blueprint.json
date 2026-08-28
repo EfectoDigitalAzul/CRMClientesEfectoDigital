@@ -33,8 +33,7 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["name", "contactInfo", "status", "isActive"]
-    }
-  },
+    },
     "Meeting": {
       "title": "Meeting",
       "description": "Scheduled meeting with a lead",
@@ -81,6 +80,18 @@
           }
         }
       }
+    },
+    "PautaScorecard": {
+      "title": "Pauta Scorecard",
+      "description": "Weekly scorecard for paid media investment and lead conversion",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "month": { "type": "number" },
+        "year": { "type": "number" },
+        "weeks": { "type": "object" },
+        "updatedAt": { "type": "string" }
+      }
     }
   },
   "firestore": {
@@ -95,6 +106,10 @@
     "/clients/{clientId}/historyNotes/{noteId}": {
       "schema": "ClientHistoryNote",
       "description": "Historical notes for a client"
+    },
+    "/clients/{clientId}/pautaScorecards/{scorecardId}": {
+      "schema": "PautaScorecard",
+      "description": "Scorecards for client paid media"
     },
     "/leads/{leadId}": {
       "schema": "Lead",

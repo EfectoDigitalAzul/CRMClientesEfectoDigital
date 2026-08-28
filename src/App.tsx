@@ -67,8 +67,9 @@ import LeadDetails from './components/LeadDetails';
 import ClientReportsDashboard from './components/ClientReportsDashboard';
 import ClientTemplates from './components/ClientTemplates';
 import TrashBin from './components/TrashBin';
+import { PautaScorecardView } from './components/PautaScorecardView';
 import { DatePicker } from './components/ui/DatePicker';
-import { Briefcase, Target, User as UserIcon, Lock, ShieldCheck, Mail, History as HistoryIcon, Activity, BarChart3, ChartPie, FileCode, Trash2, ArrowLeft, Percent, Grid, List, RefreshCcw, Info } from 'lucide-react';
+import { Briefcase, Target, User as UserIcon, Lock, ShieldCheck, Mail, History as HistoryIcon, Activity, BarChart3, ChartPie, FileCode, Trash2, ArrowLeft, Percent, Grid, List, RefreshCcw, Info, Megaphone } from 'lucide-react';
 
 const PRESET_AVATARS = [
   { name: 'Casual 1', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80' },
@@ -132,7 +133,7 @@ export default function App() {
   const [targetTaskId, setTargetTaskId] = useState<string | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [clientSearchTerm, setClientSearchTerm] = useState('');
-  const [clientFilterStatus, setClientFilterStatus] = useState<'all' | 'active' | 'inactive' | 'last_month'>('all');
+  const [clientFilterStatus, setClientFilterStatus] = useState<'all' | 'active' | 'inactive' | 'last_month' | 'pauta'>('all');
   const [selectedAMFilter, setSelectedAMFilter] = useState<string>('all');
   const [customRenewalEndDate, setCustomRenewalEndDate] = useState<string>('');
   const [clientViewMode, setClientViewMode] = useState<'grid' | 'table'>('table');
@@ -147,6 +148,11 @@ export default function App() {
   const [editedRenewalStatus, setEditedRenewalStatus] = useState<'unknown' | 'will_renew' | 'will_not_renew'>('unknown');
   const [editedContractReconsultDate, setEditedContractReconsultDate] = useState('');
   const [editedNotes, setEditedNotes] = useState('');
+  const [editedHasPautaService, setEditedHasPautaService] = useState(false);
+  const [editedMetaAdAccountId, setEditedMetaAdAccountId] = useState('');
+  const [editedMetaAccessToken, setEditedMetaAccessToken] = useState('');
+  const [editedPautaTargetCPL, setEditedPautaTargetCPL] = useState<string>('');
+  const [editedPautaCurrency, setEditedPautaCurrency] = useState<'ARS' | 'USD' | 'EUR' | 'MXN' | 'CLP' | 'COP'>('ARS');
   const [isSavingFicha, setIsSavingFicha] = useState(false);
 
   const handleOpenFicha = (client: Client) => {
@@ -158,6 +164,11 @@ export default function App() {
     setEditedRenewalStatus(client.renewalStatus || 'unknown');
     setEditedContractReconsultDate(client.contractReconsultDate || '');
     setEditedNotes(client.notes || '');
+    setEditedHasPautaService(client.hasPautaService || false);
+    setEditedMetaAdAccountId(client.metaAdAccountId || '');
+    setEditedMetaAccessToken(client.metaAccessToken || '');
+    setEditedPautaTargetCPL(client.pautaTargetCPL ? String(client.pautaTargetCPL) : '');
+    setEditedPautaCurrency(client.pautaCurrency || 'ARS');
   };
 
   const handleEndDateChange = (newDate: string) => {
@@ -187,7 +198,12 @@ export default function App() {
         renewalCount: editedRenewalCount,
         renewalStatus: editedRenewalStatus,
         contractReconsultDate: editedContractReconsultDate,
-        notes: editedNotes
+        notes: editedNotes,
+        hasPautaService: editedHasPautaService,
+        metaAdAccountId: editedMetaAdAccountId,
+        metaAccessToken: editedMetaAccessToken,
+        pautaTargetCPL: editedPautaTargetCPL ? Number(editedPautaTargetCPL) : undefined,
+        pautaCurrency: editedPautaCurrency,
       };
 
       if (isDemoMode) {
@@ -196,10 +212,16 @@ export default function App() {
         const updatedList = demoClients.map((c: any) => c.id === clientToViewFicha.id ? updatedClient : c);
         localStorage.setItem('demo-clients', JSON.stringify(updatedList));
         setClients(updatedList);
+        if (selectedClient?.id === updatedClient.id) {
+          setSelectedClient(updatedClient);
+        }
         window.dispatchEvent(new CustomEvent('demo-clients-updated'));
       } else {
         const { id, ...data } = updatedClient as any;
         await updateDoc(doc(db, 'clients', clientToViewFicha.id), data);
+        if (selectedClient?.id === updatedClient.id) {
+          setSelectedClient(updatedClient);
+        }
       }
 
       toast.success("Ficha del cliente y datos de renovación guardados con éxito.");
@@ -1590,6 +1612,14 @@ export default function App() {
                         onClick={() => setActiveTab('templates')} 
                       />
                     )}
+                    {selectedClient.hasPautaService && (
+                      <SidebarItem 
+                        icon={<Megaphone size={18} />} 
+                        label="Pauta & Scorecard" 
+                        active={activeTab === 'pauta'} 
+                        onClick={() => setActiveTab('pauta')} 
+                      />
+                    )}
                   </div>
             </div>
           )}
@@ -2163,7 +2193,7 @@ export default function App() {
             </div>
           )}
 
-          {['dashboard', 'templates', 'leads', 'meetings'].includes(activeTab) && !selectedClientId ? (
+          {['dashboard', 'templates', 'leads', 'meetings', 'pauta'].includes(activeTab) && !selectedClientId ? (
             <div className="w-full max-w-7xl mx-auto px-4 py-8 space-y-8 animate-fade-in">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 border-b border-border/20 pb-6">
                 <div className="space-y-2">
@@ -2172,7 +2202,7 @@ export default function App() {
                     Control de Clientes
                   </h2>
                   <p className="text-xs text-muted-foreground max-w-xl">
-                    Visualiza y gestiona todos los espacios de trabajo de clientes activos, completados o inactivos. Monitorea el progreso de sus contratos y renovaciones en tiempo real.
+                    Visualiza y gestiona todos los espacios de trabajo de clientes activos, completados o inactivos. Monitorea el progreso de sus contratos, pauta publicitaria y renovaciones en tiempo real.
                   </p>
                 </div>
                 
@@ -2216,6 +2246,16 @@ export default function App() {
                       }`}
                     >
                       Activos ({clients.filter(c => !c.status || !['completed', 'cancelled'].includes(c.status)).length})
+                    </button>
+                    <button
+                      onClick={() => setClientFilterStatus('pauta')}
+                      className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-1 shrink-0 ${
+                        clientFilterStatus === 'pauta'
+                          ? 'bg-red-600 text-white shadow-sm font-black'
+                          : 'text-red-600 dark:text-red-400 hover:bg-red-500/10'
+                      }`}
+                    >
+                      📢 Pauta ({clients.filter(c => c.hasPautaService).length})
                     </button>
                     <button
                       onClick={() => setClientFilterStatus('inactive')}
@@ -2310,6 +2350,7 @@ export default function App() {
                   const matchesStatus = 
                     clientFilterStatus === 'all' ||
                     (clientFilterStatus === 'active' && !isInactive) ||
+                    (clientFilterStatus === 'pauta' && client.hasPautaService) ||
                     (clientFilterStatus === 'inactive' && isInactive) ||
                     (clientFilterStatus === 'last_month' && !isInactive && (() => {
                       if (!client.contractEndDate) return false;
@@ -2413,9 +2454,16 @@ export default function App() {
                                           </span>
                                         )}
                                       </h4>
-                                      <span className="text-[9px] font-black uppercase text-muted-foreground px-1.5 py-0.5 rounded bg-muted leading-none inline-block">
-                                        PLAN: {client.planName || 'Standard'}
-                                      </span>
+                                      <div className="flex items-center gap-1 flex-wrap">
+                                        <span className="text-[9px] font-black uppercase text-muted-foreground px-1.5 py-0.5 rounded bg-muted leading-none inline-block">
+                                          PLAN: {client.planName || 'Standard'}
+                                        </span>
+                                        {client.hasPautaService && (
+                                          <span className="text-[9px] font-black uppercase text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 rounded leading-none inline-flex items-center gap-0.5">
+                                            📢 Pauta
+                                          </span>
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
                                 </td>
@@ -2510,6 +2558,18 @@ export default function App() {
                                 
                                 <td className="p-4 text-right">
                                   <div className="flex items-center justify-end gap-2">
+                                    {client.hasPautaService && (
+                                      <button
+                                        onClick={() => {
+                                          setSelectedClientId(client.id);
+                                          setActiveTab('pauta');
+                                        }}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500 hover:text-white text-red-600 dark:text-red-400 transition-all text-xs font-bold cursor-pointer"
+                                        title="Abrir Pauta & Scorecard"
+                                      >
+                                        📢 Pauta
+                                      </button>
+                                    )}
                                     <button
                                       onClick={() => handleOpenFicha(client)}
                                       className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-muted hover:bg-emerald-500/10 hover:text-emerald-500 text-muted-foreground transition-all text-xs font-bold cursor-pointer"
@@ -2596,9 +2656,16 @@ export default function App() {
                                       </span>
                                     )}
                                   </h4>
-                                  <span className="text-[9px] font-black uppercase text-muted-foreground px-1.5 py-0.5 rounded-md bg-muted leading-none inline-block">
-                                    PLAN: {client.planName || 'Standard'}
-                                  </span>
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    <span className="text-[9px] font-black uppercase text-muted-foreground px-1.5 py-0.5 rounded-md bg-muted leading-none inline-block">
+                                      PLAN: {client.planName || 'Standard'}
+                                    </span>
+                                    {client.hasPautaService && (
+                                      <span className="text-[9px] font-black uppercase text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 rounded-md leading-none inline-flex items-center gap-0.5">
+                                        📢 Pauta Activa
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                               
@@ -2698,13 +2765,27 @@ export default function App() {
 
                           {/* Footer Action */}
                           <div className="pt-4 mt-2 border-t border-border/10 flex items-center justify-between gap-1.5">
-                            <button
-                              onClick={() => handleOpenFicha(client)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-muted hover:bg-emerald-500/10 hover:text-emerald-500 text-muted-foreground transition-all text-xs font-semibold cursor-pointer shrink-0"
-                              title="Ver Ficha y Renovación"
-                            >
-                              📇 Ficha
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => handleOpenFicha(client)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-muted hover:bg-emerald-500/10 hover:text-emerald-500 text-muted-foreground transition-all text-xs font-semibold cursor-pointer shrink-0"
+                                title="Ver Ficha y Renovación"
+                              >
+                                📇 Ficha
+                              </button>
+                              {client.hasPautaService && (
+                                <button
+                                  onClick={() => {
+                                    setSelectedClientId(client.id);
+                                    setActiveTab('pauta');
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500 hover:text-white text-red-600 dark:text-red-400 transition-all text-xs font-bold cursor-pointer shrink-0"
+                                  title="Ver Pauta & Scorecard"
+                                >
+                                  📢 Pauta
+                                </button>
+                              )}
+                            </div>
                             <button
                               onClick={() => setSelectedClientId(client.id)}
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-muted hover:bg-primary hover:text-white text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-all text-xs font-bold cursor-pointer"
@@ -2724,6 +2805,18 @@ export default function App() {
               {activeTab === 'dashboard' && <DashboardStats profile={profile} isDemoMode={isDemoMode} clientId={selectedClientId} />}
               {activeTab === 'templates' && selectedClient && (
                 <ClientTemplates client={selectedClient} isDemoMode={isDemoMode} />
+              )}
+              {activeTab === 'pauta' && selectedClient && (
+                <PautaScorecardView 
+                  client={selectedClient} 
+                  profile={profile} 
+                  isDemoMode={isDemoMode} 
+                  leads={leads}
+                  onUpdateClient={(updated) => {
+                    setSelectedClient(updated);
+                    setClients(prev => prev.map(c => c.id === updated.id ? updated : c));
+                  }}
+                />
               )}
               {activeTab === 'leads' && (
                 <LeadList 
@@ -2918,6 +3011,74 @@ export default function App() {
                   <p className="text-[9px] text-muted-foreground leading-snug">
                     La advertencia de vencimiento se ocultará automáticamente hasta esta fecha de forma transitoria.
                   </p>
+                </div>
+              )}
+            </div>
+
+            {/* Sección: Servicio de Pauta & Meta Ads */}
+            <div className="space-y-3 bg-red-500/5 dark:bg-red-950/10 p-4 rounded-xl border border-red-500/10 dark:border-red-500/20">
+              <div className="flex items-center justify-between">
+                <h4 className="text-[11px] font-black uppercase tracking-wider text-red-600 dark:text-red-400 flex items-center gap-1.5">
+                  <Megaphone className="w-3.5 h-3.5" />
+                  Servicio de Pauta & Meta Ads
+                </h4>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={editedHasPautaService}
+                    onChange={(e) => setEditedHasPautaService(e.target.checked)}
+                    className="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-border"
+                  />
+                  <span className="text-xs font-bold text-foreground">
+                    {editedHasPautaService ? 'Servicio Activo ✅' : 'Activar Servicio'}
+                  </span>
+                </label>
+              </div>
+
+              <p className="text-[9.5px] text-muted-foreground leading-snug">
+                Al activar esta opción, se habilitará la pestaña exclusiva de <strong>Pauta & Scorecard</strong> en el espacio de trabajo del cliente, con tabla semanal, cálculo de CPL y conexión a Meta Ads.
+              </p>
+
+              {editedHasPautaService && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-red-500/10 animate-fade-in">
+                  <div className="space-y-1">
+                    <Label className="text-[9px] uppercase font-bold text-muted-foreground">Moneda de Pauta</Label>
+                    <select
+                      value={editedPautaCurrency}
+                      onChange={(e: any) => setEditedPautaCurrency(e.target.value)}
+                      className="w-full h-8 text-xs bg-background border border-border rounded-lg px-2 text-foreground font-medium"
+                    >
+                      <option value="ARS">ARS ($ - Pesos Argentinos)</option>
+                      <option value="USD">USD ($ - Dólares)</option>
+                      <option value="EUR">EUR (€ - Euros)</option>
+                      <option value="MXN">MXN ($ - Pesos Mexicanos)</option>
+                      <option value="CLP">CLP ($ - Pesos Chilenos)</option>
+                      <option value="COP">COP ($ - Pesos Colombianos)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-[9px] uppercase font-bold text-muted-foreground">CPL Objetivo</Label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="Ej. 1500"
+                      value={editedPautaTargetCPL}
+                      onChange={(e) => setEditedPautaTargetCPL(e.target.value)}
+                      className="w-full h-8 px-2.5 text-xs rounded-lg border border-border bg-background text-foreground font-medium"
+                    />
+                  </div>
+
+                  <div className="space-y-1 sm:col-span-2">
+                    <Label className="text-[9px] uppercase font-bold text-muted-foreground">ID Cuenta Publicitaria Meta (Opcional)</Label>
+                    <input
+                      type="text"
+                      placeholder="act_1234567890..."
+                      value={editedMetaAdAccountId}
+                      onChange={(e) => setEditedMetaAdAccountId(e.target.value)}
+                      className="w-full h-8 px-2.5 text-xs rounded-lg border border-border bg-background text-foreground font-medium"
+                    />
+                  </div>
                 </div>
               )}
             </div>

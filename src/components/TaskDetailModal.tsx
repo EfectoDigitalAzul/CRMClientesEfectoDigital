@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { 
   TeamTask, 
   TaskStatus, 
+  TaskCategory,
   TaskComment, 
   UserProfile, 
   Client,
@@ -41,7 +42,11 @@ import {
   User,
   ArrowRight,
   ShieldCheck,
-  Plus
+  Plus,
+  ArrowRightLeft,
+  Share2,
+  StickyNote,
+  Tag
 } from 'lucide-react';
 
 interface TaskDetailModalProps {
@@ -53,6 +58,7 @@ interface TaskDetailModalProps {
   onEditTask?: (task: TeamTask) => void;
   currentProfile: UserProfile | null;
   clients: Client[];
+  allUsers?: UserProfile[];
 }
 
 export default function TaskDetailModal({
@@ -64,13 +70,22 @@ export default function TaskDetailModal({
   onEditTask,
   currentProfile,
   clients,
+  allUsers = [],
 }: TaskDetailModalProps) {
   const [commentText, setCommentText] = useState('');
+  const [commentCategory, setCommentCategory] = useState<'general' | 'instruction' | 'handover'>('general');
   const [deliverableUrl, setDeliverableUrl] = useState('');
   const [deliverableNotes, setDeliverableNotes] = useState('');
   const [isEditingDeliverable, setIsEditingDeliverable] = useState(false);
   const [clientFeedbackText, setClientFeedbackText] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
+
+  // Handover / Reassignment state
+  const [isHandoverOpen, setIsHandoverOpen] = useState(false);
+  const [handoverTargetUserId, setHandoverTargetUserId] = useState('');
+  const [handoverCategory, setHandoverCategory] = useState<TaskCategory>('design');
+  const [handoverNote, setHandoverNote] = useState('');
+  const [submittingHandover, setSubmittingHandover] = useState(false);
 
   if (!task) return null;
 
@@ -239,7 +254,63 @@ export default function TaskDetailModal({
     toast.success('Feedback enviado al equipo de Efecto.');
   };
 
-  // 6. Action: Add New Comment
+  // 6. Action: Pass / Handover Task to another Team Member (e.g. Copy to Designer)
+  const handleHandoverTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!handoverTargetUserId) {
+      toast.error('Selecciona a qué miembro del equipo deseas pasarle la tarea');
+      return;
+    }
+
+    const targetUser = allUsers.find(u => u.uid === handoverTargetUserId);
+    if (!targetUser) {
+      toast.error('Usuario seleccionado no válido');
+      return;
+    }
+
+    setSubmittingHandover(true);
+    const nowIso = new Date().toISOString();
+    const handoverMessage = handoverNote.trim() 
+      ? `🔄 [Pase de Tarea]: ${currentProfile?.displayName || 'Miembro'} le pasó la tarea a ${targetUser.displayName} (${targetUser.role}). Nota: "${handoverNote.trim()}"`
+      : `🔄 [Pase de Tarea]: ${currentProfile?.displayName || 'Miembro'} le pasó la tarea a ${targetUser.displayName} (${targetUser.role}).`;
+
+    const handoverComment: TaskComment = {
+      id: `comm-handover-${Date.now()}`,
+      authorId: currentProfile?.uid || 'user',
+      authorName: currentProfile?.displayName || 'Usuario',
+      authorRole: currentProfile?.role || 'director',
+      authorPhotoURL: currentProfile?.photoURL,
+      content: handoverMessage,
+      createdAt: nowIso,
+    };
+
+    try {
+      const updated: TeamTask = {
+        ...task,
+        assigneeId: targetUser.uid,
+        assigneeName: targetUser.displayName || targetUser.username || 'Asignado',
+        assigneeRole: targetUser.role,
+        category: handoverCategory || task.category,
+        isReceived: false, // Target user needs to acknowledge "Enterado"
+        receivedAt: undefined,
+        receivedBy: undefined,
+        status: 'pending_receipt', // Resets to pending receipt so new assignee gets notified
+        comments: [...(task.comments || []), handoverComment],
+        updatedAt: nowIso,
+      };
+
+      await onUpdateTask(updated);
+      setIsHandoverOpen(false);
+      setHandoverNote('');
+      toast.success(`¡Tarea transferida con éxito a ${targetUser.displayName}!`);
+    } catch (err: any) {
+      toast.error(`Error al pasar la tarea: ${err.message || err}`);
+    } finally {
+      setSubmittingHandover(false);
+    }
+  };
+
+  // 7. Action: Add New Comment / Specific Note
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!commentText.trim()) return;
@@ -247,13 +318,17 @@ export default function TaskDetailModal({
     setSubmittingComment(true);
     const nowIso = new Date().toISOString();
 
+    let prefix = '';
+    if (commentCategory === 'instruction') prefix = '📌 [Instrucción / Requisito]: ';
+    else if (commentCategory === 'handover') prefix = '🔄 [Pase / Avance]: ';
+
     const newComment: TaskComment = {
       id: `comm-${Date.now()}`,
       authorId: currentProfile?.uid || 'user',
       authorName: currentProfile?.displayName || 'Usuario',
       authorRole: currentProfile?.role || 'director',
       authorPhotoURL: currentProfile?.photoURL,
-      content: commentText.trim(),
+      content: `${prefix}${commentText.trim()}`,
       createdAt: nowIso,
     };
 
@@ -265,7 +340,8 @@ export default function TaskDetailModal({
       };
       await onUpdateTask(updated);
       setCommentText('');
-      toast.success('Comentario agregado');
+      setCommentCategory('general');
+      toast.success('Nota guardada con éxito');
     } catch (err: any) {
       toast.error(`Error al comentar: ${err.message || err}`);
     } finally {
@@ -402,6 +478,124 @@ export default function TaskDetailModal({
               </p>
             </div>
           </div>
+
+          {/* HANDOVER / PASE DE TAREA (Para pasar del Copy al Diseñador, o a otro miembro) */}
+          {isStaff && (
+            <div className="p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/20 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-600 dark:text-indigo-400">
+                    <ArrowRightLeft size={16} />
+                  </span>
+                  <div>
+                    <h4 className="text-xs font-black uppercase tracking-tight text-foreground flex items-center gap-2">
+                      Pase de Tarea entre Miembros del Equipo
+                    </h4>
+                    <p className="text-[10px] text-muted-foreground">
+                      ¿Terminaste tu parte? Pásale la tarea a otro miembro (ej. del Copywriter al Diseñador o al AM).
+                    </p>
+                  </div>
+                </div>
+
+                {!isHandoverOpen && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      // Suggest opposite role or common next step
+                      if (task.category === 'copy') {
+                        setHandoverCategory('design');
+                      } else if (task.category === 'design') {
+                        setHandoverCategory('pauta');
+                      }
+                      setIsHandoverOpen(true);
+                    }}
+                    className="h-7 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 border-indigo-500/30 gap-1"
+                  >
+                    <ArrowRightLeft size={13} />
+                    Pasar a otro miembro
+                  </Button>
+                )}
+              </div>
+
+              {isHandoverOpen && (
+                <form onSubmit={handleHandoverTask} className="space-y-3 pt-2 border-t border-indigo-500/20 animate-in fade-in">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-[10px] font-black uppercase text-muted-foreground">
+                        Nuevo Asignado *
+                      </Label>
+                      <select
+                        value={handoverTargetUserId}
+                        onChange={e => setHandoverTargetUserId(e.target.value)}
+                        required
+                        className="w-full h-9 px-3 bg-background border border-border rounded-lg text-xs font-bold text-foreground"
+                      >
+                        <option value="">Selecciona miembro del equipo...</option>
+                        {allUsers
+                          .filter(u => u.role !== 'client' && u.uid !== task.assigneeId)
+                          .map(u => (
+                            <option key={u.uid} value={u.uid}>
+                              {u.displayName || u.username} ({u.role.toUpperCase()})
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-[10px] font-black uppercase text-muted-foreground">
+                        Área / Categoría Siguiente
+                      </Label>
+                      <select
+                        value={handoverCategory}
+                        onChange={e => setHandoverCategory(e.target.value as TaskCategory)}
+                        className="w-full h-9 px-3 bg-background border border-border rounded-lg text-xs font-bold text-foreground"
+                      >
+                        <option value="design">🎨 Diseño Gráfico</option>
+                        <option value="copy">✍️ Copywriting</option>
+                        <option value="pauta">📢 Pauta / Meta Ads</option>
+                        <option value="account_management">💼 Gestión AM</option>
+                        <option value="general">⚡ General</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-[10px] font-black uppercase text-muted-foreground">
+                      Nota o Instrucción del Pase (Opcional)
+                    </Label>
+                    <Input
+                      placeholder="Ej: Los copys ya están listos en el doc adjunto, por favor armar las placas con colores de marca..."
+                      value={handoverNote}
+                      onChange={e => setHandoverNote(e.target.value)}
+                      className="bg-background border-border text-xs h-9"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsHandoverOpen(false)}
+                      className="h-8 text-xs font-bold"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={submittingHandover || !handoverTargetUserId}
+                      className="h-8 text-xs font-black uppercase bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 shadow-sm"
+                    >
+                      <ArrowRightLeft size={13} />
+                      Confirmar Pase de Tarea
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
 
           {/* Status Changer (Staff Only) */}
           {isStaff && (
@@ -708,22 +902,67 @@ export default function TaskDetailModal({
               )}
             </div>
 
-            {/* Add Comment Input */}
-            <form onSubmit={handleAddComment} className="flex items-center gap-2 pt-1">
-              <Input
-                placeholder="Escribe una nota, consulta o actualización..."
-                value={commentText}
-                onChange={e => setCommentText(e.target.value)}
-                className="bg-background border-border text-xs h-9"
-              />
-              <Button
-                type="submit"
-                disabled={submittingComment || !commentText.trim()}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground font-black text-xs uppercase px-4 h-9 shrink-0 gap-1.5"
-              >
-                <Send size={13} />
-                Comentar
-              </Button>
+            {/* Add Comment / Note Input Form */}
+            <form onSubmit={handleAddComment} className="space-y-2 pt-1">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-black uppercase text-muted-foreground mr-1">Tipo de Nota:</span>
+                <button
+                  type="button"
+                  onClick={() => setCommentCategory('general')}
+                  className={`px-2 py-0.5 rounded-md text-[10px] font-bold border transition-colors ${
+                    commentCategory === 'general'
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background text-muted-foreground border-border/40 hover:bg-muted/40'
+                  }`}
+                >
+                  💬 General
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCommentCategory('instruction')}
+                  className={`px-2 py-0.5 rounded-md text-[10px] font-bold border transition-colors ${
+                    commentCategory === 'instruction'
+                      ? 'bg-amber-500 text-white border-amber-500'
+                      : 'bg-background text-muted-foreground border-border/40 hover:bg-muted/40'
+                  }`}
+                >
+                  📌 Requisito / Instrucción
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCommentCategory('handover')}
+                  className={`px-2 py-0.5 rounded-md text-[10px] font-bold border transition-colors ${
+                    commentCategory === 'handover'
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-background text-muted-foreground border-border/40 hover:bg-muted/40'
+                  }`}
+                >
+                  🔄 Avance / Pase
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder={
+                    commentCategory === 'instruction'
+                      ? 'Escribe la instrucción o requisito clave...'
+                      : commentCategory === 'handover'
+                      ? 'Escribe el avance realizado antes de pasar la posta...'
+                      : 'Escribe una nota, consulta o actualización...'
+                  }
+                  value={commentText}
+                  onChange={e => setCommentText(e.target.value)}
+                  className="bg-background border-border text-xs h-9"
+                />
+                <Button
+                  type="submit"
+                  disabled={submittingComment || !commentText.trim()}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-black text-xs uppercase px-4 h-9 shrink-0 gap-1.5"
+                >
+                  <Send size={13} />
+                  Guardar Nota
+                </Button>
+              </div>
             </form>
           </div>
         </div>

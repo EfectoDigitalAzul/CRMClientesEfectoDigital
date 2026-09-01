@@ -47,7 +47,8 @@ import {
   ArrowRight,
   Eye,
   ThumbsUp,
-  LayoutGrid
+  LayoutGrid,
+  GripVertical
 } from 'lucide-react';
 
 interface TaskManagerProps {
@@ -84,6 +85,10 @@ export default function TaskManager({
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedClientFilter, setSelectedClientFilter] = useState<string>(scopedClientId || 'all');
   const [quickFilter, setQuickFilter] = useState<'all' | 'my_assigned' | 'my_created' | 'designers' | 'copys' | 'waiting_feedback'>('all');
+
+  // Drag and Drop state
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [dragOverColumnId, setDragOverColumnId] = useState<TaskStatus | null>(null);
 
   const isClientUser = currentProfile?.role === 'client';
   const isStaff = !isClientUser;
@@ -285,6 +290,39 @@ export default function TaskManager({
     } catch (err: any) {
       toast.error(`Error al eliminar: ${err.message || err}`);
     }
+  };
+
+  // Drag & Drop Status Mover
+  const handleDropOnColumn = async (newStatus: TaskStatus) => {
+    if (!draggedTaskId) return;
+    const taskToMove = tasks.find((t) => t.id === draggedTaskId);
+    if (!taskToMove || taskToMove.status === newStatus) {
+      setDraggedTaskId(null);
+      setDragOverColumnId(null);
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    const updated: TeamTask = {
+      ...taskToMove,
+      status: newStatus,
+      completedAt: newStatus === 'completed' ? nowIso : (taskToMove.status === 'completed' ? undefined : taskToMove.completedAt),
+      completedBy: newStatus === 'completed' ? (currentProfile?.displayName || 'Usuario') : taskToMove.completedBy,
+      updatedAt: nowIso,
+    };
+
+    // If moving from pending_receipt to in_progress, automatically acknowledge receipt
+    if (taskToMove.status === 'pending_receipt' && (newStatus === 'in_progress' || newStatus === 'internal_review')) {
+      updated.isReceived = true;
+      updated.receivedAt = nowIso;
+      updated.receivedBy = currentProfile?.displayName || 'Equipo';
+    }
+
+    setDraggedTaskId(null);
+    setDragOverColumnId(null);
+
+    await handleSaveTask(updated);
+    toast.success(`Tarea movida a: ${newStatus}`);
   };
 
   // 3. Filtering logic
@@ -593,11 +631,33 @@ export default function TaskManager({
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 overflow-x-auto pb-4">
           {kanbanColumns.map((col) => {
             const colTasks = filteredTasks.filter((t) => t.status === col.id);
+            const isColumnDragOver = dragOverColumnId === col.id;
 
             return (
               <div
                 key={col.id}
-                className="flex flex-col rounded-2xl bg-muted/20 border border-border/40 p-3 min-w-[280px]"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (dragOverColumnId !== col.id) {
+                    setDragOverColumnId(col.id);
+                  }
+                }}
+                onDragLeave={(e) => {
+                  // Only clear if leaving the column element itself
+                  if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                  if (dragOverColumnId === col.id) {
+                    setDragOverColumnId(null);
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  handleDropOnColumn(col.id);
+                }}
+                className={`flex flex-col rounded-2xl p-3 min-w-[280px] transition-all duration-200 ${
+                  isColumnDragOver
+                    ? 'bg-primary/10 border-2 border-dashed border-primary shadow-lg ring-2 ring-primary/20 scale-[1.01]'
+                    : 'bg-muted/20 border border-border/40'
+                }`}
               >
                 {/* Column Header */}
                 <div className="flex items-center justify-between pb-3 mb-2 border-b border-border/20">
@@ -613,84 +673,109 @@ export default function TaskManager({
                 {/* Cards List */}
                 <div className="space-y-3 flex-1 overflow-y-auto max-h-[calc(100vh-320px)] pr-1">
                   {colTasks.length === 0 ? (
-                    <div className="py-8 text-center text-[11px] text-muted-foreground italic bg-background/50 rounded-xl border border-dashed border-border/30">
-                      Sin tareas
+                    <div className={`py-8 text-center text-[11px] italic rounded-xl border border-dashed transition-colors ${
+                      isColumnDragOver 
+                        ? 'border-primary/50 text-primary bg-primary/5 font-bold' 
+                        : 'border-border/30 text-muted-foreground bg-background/50'
+                    }`}>
+                      {isColumnDragOver ? 'Soltar aquí 📥' : 'Sin tareas'}
                     </div>
                   ) : (
-                    colTasks.map((task) => (
-                      <div
-                        key={task.id}
-                        onClick={() => {
-                          setSelectedTask(task);
-                          setIsDetailOpen(true);
-                        }}
-                        className="p-3.5 bg-card rounded-xl border border-border/40 hover:border-primary/50 shadow-sm transition-all cursor-pointer hover:shadow-md space-y-2.5 group"
-                      >
-                        {/* Top Tags */}
-                        <div className="flex items-center justify-between gap-1">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {getPriorityBadge(task.priority)}
-                            {getCategoryBadge(task.category)}
-                          </div>
-                          {task.clientName && (
-                            <Badge variant="outline" className="text-[9px] font-bold py-0 px-1 truncate max-w-[90px]">
-                              {task.clientName}
-                            </Badge>
-                          )}
-                        </div>
+                    colTasks.map((task) => {
+                      const isBeingDragged = draggedTaskId === task.id;
 
-                        {/* Title */}
-                        <h4 className="text-xs font-bold text-foreground group-hover:text-primary transition-colors leading-snug line-clamp-2">
-                          {task.title}
-                        </h4>
-
-                        {/* Deliverable link pill if exists */}
-                        {task.deliverableUrl && (
-                          <div className="p-1.5 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-between text-[10px] font-bold text-primary">
-                            <span className="flex items-center gap-1 truncate">
-                              <Sparkles size={11} />
-                              Entregable Listo
-                            </span>
-                            <ExternalLink size={11} className="shrink-0" />
-                          </div>
-                        )}
-
-                        {/* Client approval pill */}
-                        {task.clientApproved && (
-                          <div className="p-1 rounded-md bg-emerald-500/10 text-emerald-600 text-[10px] font-bold flex items-center gap-1">
-                            <CheckCircle2 size={11} />
-                            Aprobado por Cliente
-                          </div>
-                        )}
-
-                        {/* Bottom Row: Assignee & Date */}
-                        <div className="pt-2 border-t border-border/20 flex items-center justify-between text-[10px] text-muted-foreground">
-                          <div className="flex items-center gap-1.5 font-bold text-foreground truncate">
-                            <div className="w-5 h-5 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[9px] font-black shrink-0">
-                              {task.assigneeName.charAt(0)}
+                      return (
+                        <div
+                          key={task.id}
+                          draggable
+                          onDragStart={(e) => {
+                            setDraggedTaskId(task.id);
+                            e.dataTransfer.effectAllowed = 'move';
+                            e.dataTransfer.setData('text/plain', task.id);
+                          }}
+                          onDragEnd={() => {
+                            setDraggedTaskId(null);
+                            setDragOverColumnId(null);
+                          }}
+                          onClick={() => {
+                            setSelectedTask(task);
+                            setIsDetailOpen(true);
+                          }}
+                          className={`p-3.5 bg-card rounded-xl border shadow-sm transition-all cursor-grab active:cursor-grabbing space-y-2.5 group select-none ${
+                            isBeingDragged
+                              ? 'opacity-40 scale-95 border-primary border-dashed shadow-none'
+                              : 'border-border/40 hover:border-primary/50 hover:shadow-md'
+                          }`}
+                        >
+                          {/* Top Tags & Drag Handle */}
+                          <div className="flex items-center justify-between gap-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-muted-foreground/40 group-hover:text-primary transition-colors">
+                                <GripVertical size={13} />
+                              </span>
+                              {getPriorityBadge(task.priority)}
+                              {getCategoryBadge(task.category)}
                             </div>
-                            <span className="truncate">{task.assigneeName}</span>
+                            {task.clientName && (
+                              <Badge variant="outline" className="text-[9px] font-bold py-0 px-1 truncate max-w-[90px]">
+                                {task.clientName}
+                              </Badge>
+                            )}
                           </div>
 
-                          {task.dueDate && (
-                            <div className="flex items-center gap-1 font-semibold shrink-0">
-                              <Calendar size={11} className="text-emerald-500" />
-                              <span>{task.dueDate.split('-').slice(1).join('/')}</span>
+                          {/* Title */}
+                          <h4 className="text-xs font-bold text-foreground group-hover:text-primary transition-colors leading-snug line-clamp-2">
+                            {task.title}
+                          </h4>
+
+                          {/* Deliverable link pill if exists */}
+                          {task.deliverableUrl && (
+                            <div className="p-1.5 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-between text-[10px] font-bold text-primary">
+                              <span className="flex items-center gap-1 truncate">
+                                <Sparkles size={11} />
+                                Entregable Listo
+                              </span>
+                              <ExternalLink size={11} className="shrink-0" />
                             </div>
                           )}
-                        </div>
 
-                        {/* Quick Receipt Confirmation Button if not received */}
-                        {!task.isReceived && (
-                          <div className="pt-1">
-                            <span className="w-full py-1 rounded bg-amber-500/15 border border-amber-500/30 text-amber-600 text-[9px] font-black uppercase flex items-center justify-center gap-1">
-                              <BellRing size={10} className="animate-pulse" />
-                              Pendiente de Visto
-                            </span>
+                          {/* Client approval pill */}
+                          {task.clientApproved && (
+                            <div className="p-1 rounded-md bg-emerald-500/10 text-emerald-600 text-[10px] font-bold flex items-center gap-1">
+                              <CheckCircle2 size={11} />
+                              Aprobado por Cliente
+                            </div>
+                          )}
+
+                          {/* Bottom Row: Assignee & Date */}
+                          <div className="pt-2 border-t border-border/20 flex items-center justify-between text-[10px] text-muted-foreground">
+                            <div className="flex items-center gap-1.5 font-bold text-foreground truncate">
+                              <div className="w-5 h-5 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[9px] font-black shrink-0">
+                                {task.assigneeName.charAt(0)}
+                              </div>
+                              <span className="truncate">{task.assigneeName}</span>
+                            </div>
+
+                            {task.dueDate && (
+                              <div className="flex items-center gap-1 font-semibold shrink-0">
+                                <Calendar size={11} className="text-emerald-500" />
+                                <span>{task.dueDate.split('-').slice(1).join('/')}</span>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    ))
+
+                          {/* Quick Receipt Confirmation Button if not received */}
+                          {!task.isReceived && (
+                            <div className="pt-1">
+                              <span className="w-full py-1 rounded bg-amber-500/15 border border-amber-500/30 text-amber-600 text-[9px] font-black uppercase flex items-center justify-center gap-1">
+                                <BellRing size={10} className="animate-pulse" />
+                                Pendiente de Visto
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -853,6 +938,7 @@ export default function TaskManager({
         }}
         currentProfile={currentProfile}
         clients={clients}
+        allUsers={users}
       />
     </div>
   );

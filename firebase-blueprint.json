@@ -92,12 +92,36 @@
         "weeks": { "type": "object" },
         "updatedAt": { "type": "string" }
       }
+    },
+    "TeamTask": {
+      "title": "Team Task",
+      "description": "Tasks, design deliverables and copywriting assignments",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "priority": { "type": "string" },
+        "status": { "type": "string" },
+        "assigneeId": { "type": "string" },
+        "assigneeName": { "type": "string" },
+        "creatorId": { "type": "string" },
+        "clientId": { "type": "string" },
+        "visibleToClient": { "type": "boolean" },
+        "dueDate": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "UserProfile",
       "description": "User profiles"
+    },
+    "/team_tasks/{taskId}": {
+      "schema": "TeamTask",
+      "description": "Team tasks and deliverables"
     },
     "/clients/{clientId}": {
       "schema": "Client",

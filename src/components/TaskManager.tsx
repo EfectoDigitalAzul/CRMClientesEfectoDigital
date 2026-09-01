@@ -235,6 +235,16 @@ export default function TaskManager({
   }, [isDemoMode]);
 
   // 2. Save / Update Task Handlers
+  const cleanData = (obj: any): any => {
+    const cleaned: any = {};
+    Object.keys(obj).forEach((key) => {
+      if (obj[key] !== undefined) {
+        cleaned[key] = obj[key];
+      }
+    });
+    return cleaned;
+  };
+
   const handleSaveTask = async (taskData: TeamTask) => {
     if (isDemoMode) {
       const stored = localStorage.getItem('demo-tasks');
@@ -250,7 +260,8 @@ export default function TaskManager({
       setTasks(updatedList);
       window.dispatchEvent(new CustomEvent('demo-tasks-updated'));
     } else {
-      await setDoc(doc(db, 'team_tasks', taskData.id), taskData, { merge: true });
+      const cleaned = cleanData(taskData);
+      await setDoc(doc(db, 'team_tasks', taskData.id), cleaned, { merge: true });
     }
 
     if (selectedTask?.id === taskData.id) {

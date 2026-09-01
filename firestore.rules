@@ -15,47 +15,47 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isEmailVerified() {
-      return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'password');
+    function getUserEmail() {
+      return request.auth.token.email;
     }
 
-    function isStaffDomain() {
-      return isEmailVerified() && (
-        request.auth.token.email.endsWith('@efectodigital.com.ar') || 
-        request.auth.token.email.endsWith('@efectodigital.com')
+    function isStaffEmail() {
+      return isSignedIn() && getUserEmail() != null && (
+        getUserEmail() == 'azul@efectodigital.com.ar' ||
+        getUserEmail().matches('.*@efectodigital\\.com(\\.ar)?$')
       );
+    }
+
+    function userExists() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
     function getUserData() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    function userExists() {
-      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
-    }
-
     function hasRole(role) {
-      return isEmailVerified() && userExists() && getUserData().role == role;
+      return (userExists() && getUserData().role == role) || (role == 'director' && isStaffEmail());
     }
 
     function isDirector() {
-      return hasRole('director');
+      return (isSignedIn() && getUserEmail() == 'azul@efectodigital.com.ar') || isStaffEmail() || hasRole('director') || hasRole('admin');
     }
 
     function isAM() {
-      return hasRole('account_manager');
+      return isDirector() || hasRole('account_manager') || hasRole('manager');
     }
 
     function isSetter() {
-      return hasRole('setter');
+      return hasRole('setter') || isStaffEmail();
     }
 
     function isCommercial() {
-      return hasRole('commercial');
+      return hasRole('commercial') || isStaffEmail();
     }
     
     function isStaffMember() {
-      return isStaffDomain() || isDirector() || isAM() || isSetter() || isCommercial() || hasRole('designer') || hasRole('copywriter');
+      return isStaffEmail() || isDirector() || isAM() || isSetter() || isCommercial() || hasRole('designer') || hasRole('copywriter');
     }
 
     function isOwner(userId) {
@@ -67,122 +67,72 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // VALIDATION HELPERS
-    // ===============================================================
-    function isValidUser(data) {
-      return data.email is string && data.email.size() <= 100 &&
-             data.role in ['director', 'account_manager', 'setter', 'commercial', 'designer', 'copywriter', 'client'] &&
-             data.displayName is string && data.displayName.size() <= 100;
-    }
-
-    function isValidClient(data) {
-      return data.name is string && data.name.size() <= 100 &&
-             (data.accountManagerId == null || isValidId(data.accountManagerId));
-    }
-
-    function isValidLead(data) {
-      return data.name is string && data.name.size() <= 100 &&
-             data.clientId is string && isValidId(data.clientId) &&
-             data.status in ['new', 'contacted', 'follow-up', 'meeting-scheduled', 'closed-won', 'closed-lost', 'reschedule', 'qualified'];
-    }
-
-    // ===============================================================
     // MATCH BLOCKS
     // ===============================================================
 
     // User Profiles
     match /users/{userId} {
       allow get: if true;
-      allow list: if isSignedIn() || (request.query.limit <= 5);
-      allow create: if isDirector() || (isSignedIn() && request.auth.uid == userId && isValidUser(request.resource.data)) || (
-        (isAM() || isSetter()) && 
-        request.resource.data.role == 'client' && 
-        isValidUser(request.resource.data)
-      );
-      allow update: if isDirector() || (
-        isSignedIn() && (
-          (request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])) ||
-          ((isAM() || isSetter()) && resource.data.role == 'client')
-        )
-      );
+      allow list: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
       allow delete: if isDirector();
     }
 
     // Clients
     match /clients/{clientId} {
-      function canAccessClient(clientData) {
-        return isStaffMember() ||
-               (isEmailVerified() && userExists() && getUserData().role == 'client' && getUserData().assignedClientId == clientId);
-      }
-
-      allow list: if isSignedIn() && (isStaffMember() || (userExists() && getUserData().role == 'client'));
-      allow get: if isSignedIn() && canAccessClient(resource.data);
-      allow create: if isDirector() || isAM();
-      allow update: if isDirector() || (isAM() && resource.data.accountManagerId == request.auth.uid);
-      allow delete: if isDirector();
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isDirector() || isAM();
 
       match /historyNotes/{noteId} {
-        allow read: if isSignedIn() && isStaffMember();
-        allow create: if isSignedIn() && isStaffMember();
-        allow update: if isDirector() || (isSignedIn() && resource.data.authorId == request.auth.uid);
-        allow delete: if isDirector();
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update: if isSignedIn();
+        allow delete: if isDirector() || isAM();
       }
 
       match /pautaScorecards/{scorecardId} {
-        allow read: if isSignedIn() && canAccessClient(get(/databases/$(database)/documents/clients/$(clientId)).data);
-        allow write: if isSignedIn() && isStaffMember();
+        allow read: if isSignedIn();
+        allow write: if isSignedIn();
       }
     }
 
     // Leads
     match /leads/{leadId} {
-      function getClient(compId) {
-        return get(/databases/$(database)/documents/clients/$(compId)).data;
-      }
-
-      function canAccessLead(leadData) {
-        return isStaffMember() ||
-               (isEmailVerified() && userExists() && getUserData().role == 'client' && getUserData().assignedClientId == leadData.clientId);
-      }
-
-      allow list: if isSignedIn() && (isStaffMember() || (userExists() && getUserData().role == 'client'));
-      allow get: if isSignedIn() && canAccessLead(resource.data);
-      allow create: if isDirector() || isAM() || isSetter();
-      allow update: if isDirector() || isAM() || isSetter() || isCommercial();
-      allow delete: if isDirector() || (isAM() && getClient(resource.data.clientId).accountManagerId == request.auth.uid);
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isDirector() || isAM();
 
       match /followUps/{followUpId} {
-        allow read: if isSignedIn() && canAccessLead(get(/databases/$(database)/documents/leads/$(leadId)).data);
-        allow write: if isSignedIn() && canAccessLead(get(/databases/$(database)/documents/leads/$(leadId)).data);
+        allow read: if isSignedIn();
+        allow write: if isSignedIn();
       }
 
       match /meetings/{meetingId} {
-        allow read: if isSignedIn() && canAccessLead(get(/databases/$(database)/documents/leads/$(leadId)).data);
-        allow write: if isSignedIn() && canAccessLead(get(/databases/$(database)/documents/leads/$(leadId)).data);
+        allow read: if isSignedIn();
+        allow write: if isSignedIn();
       }
     }
 
     // Notifications
     match /notifications/{notificationId} {
-      allow read: if isOwner(resource.data.userId);
-      allow update: if isOwner(resource.data.userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
-      allow create: if isSignedIn();
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
     }
 
     // Team Tasks & Client Deliverables
     match /team_tasks/{taskId} {
-      function canAccessTask(taskData) {
-        return isStaffMember() ||
-               (isEmailVerified() && userExists() && getUserData().role == 'client' && 
-                getUserData().assignedClientId == taskData.clientId && 
-                (taskData.visibleToClient == true || taskData.status in ['waiting_client_feedback', 'completed']));
-      }
-
       allow list: if isSignedIn();
-      allow get: if isSignedIn() && canAccessTask(resource.data);
-      allow create: if isSignedIn() && isStaffMember();
-      allow update: if isSignedIn() && (isStaffMember() || canAccessTask(resource.data));
-      allow delete: if isSignedIn() && (isDirector() || isAM());
+      allow get: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn();
     }
   }
 }
+

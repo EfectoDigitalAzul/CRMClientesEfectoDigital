@@ -69,6 +69,7 @@ import ClientTemplates from './components/ClientTemplates';
 import TrashBin from './components/TrashBin';
 import { PautaScorecardView } from './components/PautaScorecardView';
 import TaskManager from './components/TaskManager';
+import ClientWorkspaceHeader from './components/ClientWorkspaceHeader';
 import { DatePicker } from './components/ui/DatePicker';
 import { Briefcase, Target, User as UserIcon, Lock, ShieldCheck, Mail, History as HistoryIcon, Activity, BarChart3, ChartPie, FileCode, Trash2, ArrowLeft, Percent, Grid, List, RefreshCcw, Info, Megaphone, CheckSquare } from 'lucide-react';
 
@@ -1380,25 +1381,15 @@ export default function App() {
               </Button>
             </div>
 
-            <nav className="flex-1 space-y-2">
-              {profile?.role !== 'client' && (profile?.role === 'director' || profile?.role === 'account_manager' || profile?.role === 'setter' || profile?.role === 'commercial') && (
+            <nav className="flex-1 space-y-1">
+              {profile?.role !== 'client' ? (
                 <>
                   <SidebarItem 
                     icon={<Briefcase size={18} />} 
-                    label="Clientes (Panel)" 
+                    label="Cartera de Clientes" 
                     active={activeTab === 'dashboard' && !selectedClientId} 
                     onClick={() => {
                       setActiveTab('dashboard');
-                      setSelectedClientId('');
-                      setIsMobileMenuOpen(false);
-                    }} 
-                  />
-                  <SidebarItem 
-                    icon={<Users size={18} />} 
-                    label="Equipo" 
-                    active={activeTab === 'team'} 
-                    onClick={() => {
-                      setActiveTab('team');
                       setSelectedClientId('');
                       setIsMobileMenuOpen(false);
                     }} 
@@ -1413,14 +1404,55 @@ export default function App() {
                       setIsMobileMenuOpen(false);
                     }} 
                   />
+                  <SidebarItem 
+                    icon={<Users size={18} />} 
+                    label="Equipo" 
+                    active={activeTab === 'team'} 
+                    onClick={() => {
+                      setActiveTab('team');
+                      setSelectedClientId('');
+                      setIsMobileMenuOpen(false);
+                    }} 
+                  />
+                  {profile?.role === 'director' && (
+                    <SidebarItem 
+                      icon={<BarChart3 size={18} />} 
+                      label="Rendimiento" 
+                      active={activeTab === 'performance'} 
+                      onClick={() => {
+                        setActiveTab('performance');
+                        setSelectedClientId('');
+                        setIsMobileMenuOpen(false);
+                      }} 
+                    />
+                  )}
+                  {(profile?.role === 'director' || profile?.role === 'account_manager') && (
+                    <SidebarItem 
+                      icon={<Settings size={18} />} 
+                      label="Accesos & Roles" 
+                      active={activeTab === 'settings'} 
+                      onClick={() => { 
+                        setActiveTab('settings'); 
+                        setSelectedClientId('');
+                        setIsMobileMenuOpen(false); 
+                      }} 
+                    />
+                  )}
+                  {profile?.role === 'director' && (
+                    <SidebarItem 
+                      icon={<Trash2 size={18} />} 
+                      label="Papelera" 
+                      active={activeTab === 'trash'} 
+                      onClick={() => { 
+                        setActiveTab('trash'); 
+                        setSelectedClientId('');
+                        setIsMobileMenuOpen(false); 
+                      }} 
+                    />
+                  )}
                 </>
-              )}
-
-              {selectedClient && (
-                <div className="pt-4 mt-4 border-t border-border">
-                  <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-4 px-2">
-                    Navegación Cliente
-                  </p>
+              ) : (
+                <>
                   <SidebarItem 
                     icon={<LayoutDashboard size={18} />} 
                     label="Escritorio" 
@@ -1429,45 +1461,17 @@ export default function App() {
                   />
                   <SidebarItem 
                     icon={<CheckSquare size={18} />} 
-                    label={profile?.role === 'client' ? "Mis Creativos & Tareas" : "Tareas & Creativos"} 
+                    label="Mis Creativos & Tareas" 
                     active={activeTab === 'tasks'} 
                     onClick={() => { setActiveTab('tasks'); setIsMobileMenuOpen(false); }} 
                   />
-                  {showLeadsSection && (
-                    <SidebarItem 
-                      icon={<Users size={18} />} 
-                      label="Leads / Contactos" 
-                      active={activeTab === 'leads' && leadViewMode !== 'followup'} 
-                      onClick={() => { setActiveTab('leads'); setLeadViewMode('table'); setIsMobileMenuOpen(false); }} 
-                    />
-                  )}
                   <SidebarItem 
                     icon={<Calendar size={18} />} 
                     label="Agenda" 
                     active={activeTab === 'meetings'} 
                     onClick={() => { setActiveTab('meetings'); setIsMobileMenuOpen(false); }} 
                   />
-                  {showLeadsSection && (
-                    <SidebarItem 
-                      icon={<Clock size={18} />} 
-                      label="Seguimientos" 
-                      active={activeTab === 'leads' && leadViewMode === 'followup'} 
-                      onClick={() => { 
-                        setActiveTab('leads'); 
-                        setLeadViewMode('followup');
-                        setIsMobileMenuOpen(false); 
-                      }} 
-                    />
-                  )}
-                  {selectedClient.templatesEnabled && profile?.role !== 'client' && (
-                    <SidebarItem 
-                      icon={<FileCode size={18} />} 
-                      label="Plantillas Pitching" 
-                      active={activeTab === 'templates'} 
-                      onClick={() => { setActiveTab('templates'); setIsMobileMenuOpen(false); }} 
-                    />
-                  )}
-                  {(selectedClient.hasPautaService || isStaff) && (
+                  {selectedClient?.hasPautaService && (
                     <SidebarItem 
                       icon={<Megaphone size={18} />} 
                       label="Pauta & Scorecard" 
@@ -1475,38 +1479,7 @@ export default function App() {
                       onClick={() => { setActiveTab('pauta'); setIsMobileMenuOpen(false); }} 
                     />
                   )}
-                </div>
-              )}
-
-              {profile?.role === 'director' && (
-                <SidebarItem 
-                  icon={<BarChart3 size={18} />} 
-                  label="Rendimiento Equipo" 
-                  active={activeTab === 'performance'} 
-                  onClick={() => {
-                    setActiveTab('performance');
-                    setSelectedClientId('');
-                    setIsMobileMenuOpen(false);
-                  }} 
-                />
-              )}
-
-              {(profile?.role === 'director' || profile?.role === 'account_manager') && (
-                <SidebarItem 
-                  icon={<Settings size={18} />} 
-                  label="Gestión de Accesos" 
-                  active={activeTab === 'settings'} 
-                  onClick={() => { setActiveTab('settings'); setIsMobileMenuOpen(false); }} 
-                />
-              )}
-
-              {profile?.role === 'director' && (
-                <SidebarItem 
-                  icon={<Trash2 size={18} />} 
-                  label="Papelera" 
-                  active={activeTab === 'trash'} 
-                  onClick={() => { setActiveTab('trash'); setIsMobileMenuOpen(false); }} 
-                />
+                </>
               )}
             </nav>
 
@@ -1563,23 +1536,14 @@ export default function App() {
         </div>
         
         <nav className="flex-1 space-y-1 py-4">
-          {profile?.role !== 'client' && (profile?.role === 'director' || profile?.role === 'account_manager' || profile?.role === 'setter' || profile?.role === 'commercial') && (
+          {profile?.role !== 'client' ? (
             <>
               <SidebarItem 
                 icon={<Briefcase size={18} />} 
-                label="Clientes (Panel)" 
+                label="Cartera de Clientes" 
                 active={activeTab === 'dashboard' && !selectedClientId} 
                 onClick={() => {
                   setActiveTab('dashboard');
-                  setSelectedClientId('');
-                }} 
-              />
-              <SidebarItem 
-                icon={<Users size={18} />} 
-                label="Equipo" 
-                active={activeTab === 'team'} 
-                onClick={() => {
-                  setActiveTab('team');
                   setSelectedClientId('');
                 }} 
               />
@@ -1592,103 +1556,37 @@ export default function App() {
                   setSelectedClientId('');
                 }} 
               />
-            </>
-          )}
-
-          {selectedClient && (
-            <div className="px-6 py-4 mt-2 border-t border-border">
-              <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-4">
-                {profile?.role === 'client' ? 'Mi Espacio' : 'Cliente Activo'}
-              </p>
-              <div className="flex items-center gap-2 mb-6 bg-secondary p-2 rounded-lg border border-border">
-                <Briefcase size={14} className="text-primary" />
-                <span className="text-xs font-bold truncate">{selectedClient.name}</span>
-              </div>
-              
-                  <div className="space-y-1 -mx-6">
-                    <SidebarItem 
-                      icon={<LayoutDashboard size={18} />} 
-                      label="Escritorio" 
-                      active={activeTab === 'dashboard'} 
-                      onClick={() => setActiveTab('dashboard')} 
-                    />
-                    <SidebarItem 
-                      icon={<CheckSquare size={18} />} 
-                      label={profile?.role === 'client' ? "Mis Creativos & Tareas" : "Tareas & Creativos"} 
-                      active={activeTab === 'tasks'} 
-                      onClick={() => setActiveTab('tasks')} 
-                    />
-                    {showLeadsSection && (
-                      <SidebarItem 
-                        icon={<Users size={18} />} 
-                        label="Leads / Contactos" 
-                        active={activeTab === 'leads' && leadViewMode !== 'followup'} 
-                        onClick={() => {
-                          setActiveTab('leads');
-                          setLeadViewMode('table');
-                        }} 
-                      />
-                    )}
-                    <SidebarItem 
-                      icon={<Calendar size={18} />} 
-                      label="Agenda Reuniones" 
-                      active={activeTab === 'meetings'} 
-                      onClick={() => setActiveTab('meetings')} 
-                    />
-                    {showLeadsSection && (
-                      <SidebarItem 
-                        icon={<Clock size={18} />} 
-                        label="Seguimientos" 
-                        active={activeTab === 'leads' && leadViewMode === 'followup'} 
-                        onClick={() => { 
-                          setActiveTab('leads'); 
-                          setLeadViewMode('followup');
-                        }} 
-                      />
-                    )}
-                    {selectedClient.templatesEnabled && profile?.role !== 'client' && (
-                      <SidebarItem 
-                        icon={<FileCode size={18} />} 
-                        label="Plantillas Pitching" 
-                        active={activeTab === 'templates'} 
-                        onClick={() => setActiveTab('templates')} 
-                      />
-                    )}
-                    {(selectedClient.hasPautaService || isStaff) && (
-                      <SidebarItem 
-                        icon={<Megaphone size={18} />} 
-                        label="Pauta & Scorecard" 
-                        active={activeTab === 'pauta'} 
-                        onClick={() => setActiveTab('pauta')} 
-                      />
-                    )}
-                  </div>
-            </div>
-          )}
-
-          {profile?.role === 'director' && (
-            <SidebarItem 
-              icon={<BarChart3 size={18} />} 
-              label="Rendimiento Equipo" 
-              active={activeTab === 'performance'} 
-              onClick={() => {
-                setActiveTab('performance');
-                setSelectedClientId('');
-              }} 
-            />
-          )}
-
-          {(profile?.role === 'director' || profile?.role === 'account_manager') && (
-            <>
               <SidebarItem 
-                icon={<Settings size={18} />} 
-                label="Gestión de Accesos" 
-                active={activeTab === 'settings'} 
+                icon={<Users size={18} />} 
+                label="Equipo" 
+                active={activeTab === 'team'} 
                 onClick={() => {
-                  setActiveTab('settings');
+                  setActiveTab('team');
                   setSelectedClientId('');
                 }} 
               />
+              {profile?.role === 'director' && (
+                <SidebarItem 
+                  icon={<BarChart3 size={18} />} 
+                  label="Rendimiento" 
+                  active={activeTab === 'performance'} 
+                  onClick={() => {
+                    setActiveTab('performance');
+                    setSelectedClientId('');
+                  }} 
+                />
+              )}
+              {(profile?.role === 'director' || profile?.role === 'account_manager') && (
+                <SidebarItem 
+                  icon={<Settings size={18} />} 
+                  label="Accesos & Roles" 
+                  active={activeTab === 'settings'} 
+                  onClick={() => {
+                    setActiveTab('settings');
+                    setSelectedClientId('');
+                  }} 
+                />
+              )}
               {profile?.role === 'director' && (
                 <SidebarItem 
                   icon={<Trash2 size={18} />} 
@@ -1698,6 +1596,35 @@ export default function App() {
                     setActiveTab('trash');
                     setSelectedClientId('');
                   }} 
+                />
+              )}
+            </>
+          ) : (
+            <>
+              <SidebarItem 
+                icon={<LayoutDashboard size={18} />} 
+                label="Escritorio" 
+                active={activeTab === 'dashboard'} 
+                onClick={() => setActiveTab('dashboard')} 
+              />
+              <SidebarItem 
+                icon={<CheckSquare size={18} />} 
+                label="Mis Creativos & Tareas" 
+                active={activeTab === 'tasks'} 
+                onClick={() => setActiveTab('tasks')} 
+              />
+              <SidebarItem 
+                icon={<Calendar size={18} />} 
+                label="Agenda Reuniones" 
+                active={activeTab === 'meetings'} 
+                onClick={() => setActiveTab('meetings')} 
+              />
+              {selectedClient?.hasPautaService && (
+                <SidebarItem 
+                  icon={<Megaphone size={18} />} 
+                  label="Pauta & Scorecard" 
+                  active={activeTab === 'pauta'} 
+                  onClick={() => setActiveTab('pauta')} 
                 />
               )}
             </>
@@ -1879,7 +1806,27 @@ export default function App() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8">
+        {/* Client Workspace Sub-Header (Context Navigation) */}
+        {selectedClient && (
+          <ClientWorkspaceHeader
+            client={selectedClient}
+            activeTab={activeTab}
+            onTabChange={(tab) => setActiveTab(tab)}
+            onBackToAgency={() => {
+              setSelectedClientId('');
+              setActiveTab('dashboard');
+            }}
+            onOpenFicha={() => handleOpenFicha(selectedClient)}
+            profile={profile}
+            leadViewMode={leadViewMode}
+            onLeadViewModeChange={(mode) => {
+              setLeadViewMode(mode);
+              setActiveTab('leads');
+            }}
+          />
+        )}
+
+        <div className="flex-1 overflow-y-auto p-4 md:p-8">
           {/* BANNER DE VENCIMIENTO DE CONTRATO (De 1 semana o menos) */}
           {(() => {
             const alert = getContractStatusAlert();

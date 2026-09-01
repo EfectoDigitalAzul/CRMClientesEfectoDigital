@@ -144,18 +144,22 @@ export default function ClientSelector({ selectedClientId, onClientChange, isDem
         value={selectedClientId || "__all_clients__"} 
         onValueChange={(val) => onClientChange(val === "__all_clients__" ? "" : val)}
       >
-        <SelectTrigger className="w-[200px] h-9 bg-muted border-border shadow-none font-bold text-xs text-foreground">
-          <div className="flex items-center gap-2 max-w-[170px]">
-            <Briefcase size={14} className="text-primary shrink-0" />
+        <SelectTrigger className={`h-9 px-3 border shadow-xs font-bold text-xs transition-all ${
+          selectedClientId 
+            ? 'bg-primary/10 border-primary/40 text-primary hover:bg-primary/15 min-w-[200px] max-w-[240px]' 
+            : 'bg-muted/80 border-border text-foreground hover:bg-muted min-w-[190px]'
+        }`}>
+          <div className="flex items-center gap-2 truncate">
+            <Briefcase size={14} className={selectedClientId ? "text-primary shrink-0" : "text-muted-foreground shrink-0"} />
             <SelectValue placeholder="Seleccionar Cliente">
-              {clients.find(c => c.id === selectedClientId)?.name || "📂 Todos los Clientes"}
+              {clients.find(c => c.id === selectedClientId)?.name || "🏢 Toda la Agencia"}
             </SelectValue>
           </div>
         </SelectTrigger>
-        <SelectContent className="bg-popover border-border">
+        <SelectContent className="bg-popover border-border min-w-[240px]">
           {profile && ROLE_PERMISSIONS[profile.role]?.canViewClients && (
-            <SelectItem value="__all_clients__" className="text-xs font-bold focus:bg-primary/10 focus:text-primary pl-4 text-primary">
-              📂 Todos los Clientes (Ver panel)
+            <SelectItem value="__all_clients__" className="text-xs font-black focus:bg-primary/10 focus:text-primary pl-3 text-primary">
+              🏢 Toda la Agencia (Panel General)
             </SelectItem>
           )}
           {clients.length === 0 && (

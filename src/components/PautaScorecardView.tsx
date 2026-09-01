@@ -369,82 +369,82 @@ export function PautaScorecardView({
   // Meta Ads API Sync Action
   const handleSyncMeta = async () => {
     setIsSyncingMeta(true);
-    const accountId = client.metaAdAccountId || metaAccountId;
-    const token = client.metaAccessToken || metaAccessToken;
+    const accountId = (client.metaAdAccountId || metaAccountId || '').trim();
+    const token = (client.metaAccessToken || metaAccessToken || '').trim();
+
+    if (!accountId) {
+      setIsSyncingMeta(false);
+      toast.error("Debes ingresar el ID de Cuenta Publicitaria de Meta (ej. act_752127200756905).");
+      return;
+    }
+
+    if (!token) {
+      setIsSyncingMeta(false);
+      toast.error("Debes ingresar el Meta Access Token para consultar la API de Meta Ads.");
+      return;
+    }
 
     try {
-      if (token && accountId) {
-        // Live call to Meta Graph API if credentials are provided
-        const cleanAccountId = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
-        const pad = (n: number) => String(n).padStart(2, '0');
-        const m = pad(selectedMonth);
-        const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+      // Call backend proxy route to avoid CORS and get precise weekly breakdown
+      const res = await fetch("/api/meta/insights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accountId,
+          accessToken: token,
+          year: selectedYear,
+          month: selectedMonth,
+        }),
+      });
 
-        const since = `${selectedYear}-${m}-01`;
-        const until = `${selectedYear}-${m}-${pad(daysInMonth)}`;
+      const data = await res.json();
 
-        // Attempt fetch insights from Meta Marketing API
-        const url = `https://graph.facebook.com/v19.0/${cleanAccountId}/insights?time_range={"since":"${since}","until":"${until}"}&time_increment=1&fields=spend,actions,cost_per_action_type&access_token=${token}`;
-
-        try {
-          const res = await fetch(url);
-          const data = await res.json();
-
-          if (data.error) {
-            console.warn("Meta API Error response:", data.error);
-            throw new Error(data.error.message || "Error al conectar con la cuenta de Meta");
-          }
-
-          toast.success("¡Datos obtenidos exitosamente de la API de Meta Ads!");
-        } catch (fetchErr: any) {
-          // If CORS or sandbox token restricts client-side direct request, we explain and apply intelligent simulation with notification
-          console.log("Direct client Meta API fetch:", fetchErr.message);
-          toast.info("Conectado con cuenta Meta. Aplicando sincronización calculada...");
-        }
+      if (!res.ok || data.error) {
+        throw new Error(data.error || "Error al conectar con la API de Meta Ads");
       }
 
-      // Apply realistic synchronization based on weekly budget
-      const baseFormSpend = (client.budget || 200000) / 4;
-      const baseWppSpend = ((client.budget || 200000) * 0.4) / 4;
+      const { weeks, totalSpend, totalLeads, cleanAccountId } = data;
 
-      const randomJitter = (base: number, pct: number = 0.15) => Math.round(base * (1 + (Math.random() * pct * 2 - pct)));
+      if (!weeks) {
+        throw new Error("Formato de respuesta inválido de Meta Insights");
+      }
 
       const updatedWeeks = {
         week1: {
           ...scorecard.weeks.week1,
-          formSpend: scorecard.weeks.week1.formSpend || randomJitter(baseFormSpend),
-          formLeads: scorecard.weeks.week1.formLeads || Math.max(1, Math.round(baseFormSpend / (client.pautaTargetCPL || 8500))),
-          wppSpend: scorecard.weeks.week1.wppSpend || randomJitter(baseWppSpend),
-          wppLeads: scorecard.weeks.week1.wppLeads || Math.max(1, Math.round(baseWppSpend / ((client.pautaTargetCPL || 8500) * 0.8))),
-          syncedWithMeta: true,
-          lastMetaSync: new Date().toISOString(),
+          formSpend: Number(weeks.week1?.formSpend ?? 0),
+          formLeads: Number(weeks.week1?.formLeads ?? 0),
+          wppSpend: Number(weeks.week1?.wppSpend ?? 0),
+          wppLeads: Number(weeks.week1?.wppLeads ?? 0),
+          syncedWithMeta: !weeks.week1?.isFuture,
+          lastMetaSync: weeks.week1?.isFuture ? undefined : new Date().toISOString(),
         },
         week2: {
           ...scorecard.weeks.week2,
-          formSpend: scorecard.weeks.week2.formSpend || randomJitter(baseFormSpend),
-          formLeads: scorecard.weeks.week2.formLeads || Math.max(1, Math.round(baseFormSpend / (client.pautaTargetCPL || 8500))),
-          wppSpend: scorecard.weeks.week2.wppSpend || randomJitter(baseWppSpend),
-          wppLeads: scorecard.weeks.week2.wppLeads || Math.max(1, Math.round(baseWppSpend / ((client.pautaTargetCPL || 8500) * 0.8))),
-          syncedWithMeta: true,
-          lastMetaSync: new Date().toISOString(),
+          formSpend: Number(weeks.week2?.formSpend ?? 0),
+          formLeads: Number(weeks.week2?.formLeads ?? 0),
+          wppSpend: Number(weeks.week2?.wppSpend ?? 0),
+          wppLeads: Number(weeks.week2?.wppLeads ?? 0),
+          syncedWithMeta: !weeks.week2?.isFuture,
+          lastMetaSync: weeks.week2?.isFuture ? undefined : new Date().toISOString(),
         },
         week3: {
           ...scorecard.weeks.week3,
-          formSpend: scorecard.weeks.week3.formSpend || randomJitter(baseFormSpend),
-          formLeads: scorecard.weeks.week3.formLeads || Math.max(1, Math.round(baseFormSpend / (client.pautaTargetCPL || 8500))),
-          wppSpend: scorecard.weeks.week3.wppSpend || randomJitter(baseWppSpend),
-          wppLeads: scorecard.weeks.week3.wppLeads || Math.max(1, Math.round(baseWppSpend / ((client.pautaTargetCPL || 8500) * 0.8))),
-          syncedWithMeta: true,
-          lastMetaSync: new Date().toISOString(),
+          formSpend: Number(weeks.week3?.formSpend ?? 0),
+          formLeads: Number(weeks.week3?.formLeads ?? 0),
+          wppSpend: Number(weeks.week3?.wppSpend ?? 0),
+          wppLeads: Number(weeks.week3?.wppLeads ?? 0),
+          syncedWithMeta: !weeks.week3?.isFuture,
+          lastMetaSync: weeks.week3?.isFuture ? undefined : new Date().toISOString(),
         },
         week4: {
           ...scorecard.weeks.week4,
-          formSpend: scorecard.weeks.week4.formSpend || randomJitter(baseFormSpend),
-          formLeads: scorecard.weeks.week4.formLeads || Math.max(1, Math.round(baseFormSpend / (client.pautaTargetCPL || 8500))),
-          wppSpend: scorecard.weeks.week4.wppSpend || randomJitter(baseWppSpend),
-          wppLeads: scorecard.weeks.week4.wppLeads || Math.max(1, Math.round(baseWppSpend / ((client.pautaTargetCPL || 8500) * 0.8))),
-          syncedWithMeta: true,
-          lastMetaSync: new Date().toISOString(),
+          formSpend: Number(weeks.week4?.formSpend ?? 0),
+          formLeads: Number(weeks.week4?.formLeads ?? 0),
+          wppSpend: Number(weeks.week4?.wppSpend ?? 0),
+          wppLeads: Number(weeks.week4?.wppLeads ?? 0),
+          syncedWithMeta: !weeks.week4?.isFuture,
+          lastMetaSync: weeks.week4?.isFuture ? undefined : new Date().toISOString(),
         },
       };
 
@@ -452,15 +452,42 @@ export function PautaScorecardView({
         ...scorecard,
         weeks: updatedWeeks,
         updatedAt: new Date().toISOString(),
-        updatedBy: `${profile?.displayName || 'Usuario'} (Meta Ads API)`,
+        updatedBy: `${profile?.displayName || 'Usuario'} (Meta Ads: ${cleanAccountId})`,
       };
 
       setScorecard(updatedScorecard);
       saveScorecard(updatedScorecard);
+
+      // Also persist token/accountId to client if they were not saved
+      if (token !== client.metaAccessToken || accountId !== client.metaAdAccountId) {
+        const updatedClient: Client = {
+          ...client,
+          metaAdAccountId: accountId,
+          metaAccessToken: token,
+        };
+        if (isDemoMode) {
+          const stored = localStorage.getItem('demo-clients');
+          const demoClients = stored ? JSON.parse(stored) : [];
+          const updatedList = demoClients.map((c: any) => c.id === client.id ? updatedClient : c);
+          localStorage.setItem('demo-clients', JSON.stringify(updatedList));
+        } else {
+          setDoc(doc(db, 'clients', client.id), updatedClient, { merge: true }).catch(console.error);
+        }
+        if (onUpdateClient) onUpdateClient(updatedClient);
+      }
+
       setIsMetaModalOpen(false);
-      toast.success("¡Scorecard de Pauta sincronizado con Meta Ads exitosamente!");
+      toast.success(
+        `¡Sincronización con Meta exitosa! Total período: $${(totalSpend || 0).toLocaleString('es-AR')} y ${totalLeads || 0} leads.`
+      );
+
+      const hasFutureWeeks = Object.values(weeks).some((w: any) => w.isFuture);
+      if (hasFutureWeeks) {
+        toast.info("Las semanas futuras quedaron en $0 ya que sus fechas aún no han transcurrido.");
+      }
     } catch (e: any) {
-      toast.error(`Error al sincronizar con Meta: ${e.message || e}`);
+      console.error("Error sincronizando con Meta:", e);
+      toast.error(`Error al sincronizar con Meta Ads: ${e.message || e}`);
     } finally {
       setIsSyncingMeta(false);
     }

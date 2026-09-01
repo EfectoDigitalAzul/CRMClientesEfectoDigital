@@ -1,5 +1,5 @@
 
-export type UserRole = 'director' | 'account_manager' | 'setter' | 'commercial' | 'client';
+export type UserRole = 'director' | 'account_manager' | 'setter' | 'commercial' | 'designer' | 'copywriter' | 'client';
 
 export interface Permissions {
   canViewStaff: boolean;
@@ -30,6 +30,20 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     canManagePermissions: false,
     canViewReports: true,
     canManageLeads: true,
+  },
+  designer: {
+    canViewStaff: false,
+    canViewClients: true,
+    canManagePermissions: false,
+    canViewReports: false,
+    canManageLeads: false,
+  },
+  copywriter: {
+    canViewStaff: false,
+    canViewClients: true,
+    canManagePermissions: false,
+    canViewReports: false,
+    canManageLeads: false,
   },
   setter: {
     canViewStaff: false,

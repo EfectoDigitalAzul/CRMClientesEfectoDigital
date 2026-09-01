@@ -1,4 +1,88 @@
-export type UserRole = 'setter' | 'commercial' | 'director' | 'account_manager' | 'client';
+export type UserRole = 'setter' | 'commercial' | 'director' | 'account_manager' | 'designer' | 'copywriter' | 'client';
+
+export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+export type TaskCategory = 'design' | 'copy' | 'account_management' | 'pauta' | 'general';
+export type TaskStatus = 
+  | 'pending_receipt'         // Pendiente de confirmación/visto por el asignado
+  | 'in_progress'             // En proceso de elaboración
+  | 'internal_review'         // En revisión interna por AM / Equipo
+  | 'waiting_client_feedback' // Esperando feedback del cliente
+  | 'completed'               // Tarea completada y aprobada
+  | 'cancelled';              // Cancelada
+
+export interface TaskAttachment {
+  id: string;
+  name: string;
+  url: string;
+  type: 'figma' | 'drive' | 'canva' | 'loom' | 'image' | 'doc' | 'link' | 'file';
+  size?: string;
+  uploadedAt: string;
+  uploadedBy: string;
+}
+
+export interface TaskComment {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorRole: UserRole;
+  authorPhotoURL?: string;
+  content: string;
+  createdAt: string;
+  attachments?: TaskAttachment[];
+}
+
+export interface TeamTask {
+  id: string;
+  title: string;
+  description: string;
+  category: TaskCategory;
+  priority: TaskPriority;
+  status: TaskStatus;
+  
+  // Who created & who is assigned
+  creatorId: string;
+  creatorName: string;
+  creatorRole: UserRole;
+  
+  assigneeId: string;
+  assigneeName: string;
+  assigneeRole: UserRole;
+  
+  // Client association (or internal)
+  clientId?: string;
+  clientName?: string;
+  
+  // Receipt tracking ("Visto / Enterado")
+  isReceived: boolean;
+  receivedAt?: string;
+  receivedBy?: string;
+  
+  // Client feedback & approval flow
+  visibleToClient: boolean;
+  clientFeedback?: string;
+  clientFeedbackDate?: string;
+  clientApproved?: boolean;
+  clientApprovedAt?: string;
+
+  // Deliverable link & notes
+  deliverableUrl?: string;
+  deliverableNotes?: string;
+
+  // Deadlines & Completion
+  dueDate?: string; // YYYY-MM-DD
+  dueTime?: string; // HH:mm
+  completedAt?: string;
+  completedBy?: string;
+  
+  attachments: TaskAttachment[];
+  comments: TaskComment[];
+  
+  createdAt: string;
+  updatedAt: string;
+  isDeleted?: boolean;
+  deletedAt?: string;
+  deletedBy?: string;
+}
 
 export interface UserProfile {
   uid: string;

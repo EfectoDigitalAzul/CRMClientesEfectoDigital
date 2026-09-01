@@ -411,6 +411,8 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                             <SelectItem value="setter">Setter</SelectItem>
                             <SelectItem value="commercial">Comercial</SelectItem>
                             <SelectItem value="account_manager">AM</SelectItem>
+                            <SelectItem value="designer">Diseñador</SelectItem>
+                            <SelectItem value="copywriter">Copywriter</SelectItem>
                             <SelectItem value="director">Director</SelectItem>
                           </SelectContent>
                         </Select>
@@ -598,6 +600,8 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                     <>
                       <SelectItem value="setter">Setter</SelectItem>
                       <SelectItem value="account_manager">Account Manager</SelectItem>
+                      <SelectItem value="designer">Diseñador</SelectItem>
+                      <SelectItem value="copywriter">Copywriter</SelectItem>
                       <SelectItem value="commercial">Comercial</SelectItem>
                       <SelectItem value="director">Director</SelectItem>
                     </>
@@ -756,6 +760,8 @@ export default function UserManagement({ isDemoMode, currentProfile }: UserManag
                       <>
                         <SelectItem value="setter">Setter</SelectItem>
                         <SelectItem value="account_manager">AM</SelectItem>
+                        <SelectItem value="designer">Diseñador</SelectItem>
+                        <SelectItem value="copywriter">Copywriter</SelectItem>
                         <SelectItem value="commercial">Comercial</SelectItem>
                         <SelectItem value="director">Director</SelectItem>
                       </>

@@ -55,7 +55,7 @@ service cloud.firestore {
     }
     
     function isStaffMember() {
-      return isStaffDomain() || isDirector() || isAM() || isSetter() || isCommercial();
+      return isStaffDomain() || isDirector() || isAM() || isSetter() || isCommercial() || hasRole('designer') || hasRole('copywriter');
     }
 
     function isOwner(userId) {
@@ -71,7 +71,7 @@ service cloud.firestore {
     // ===============================================================
     function isValidUser(data) {
       return data.email is string && data.email.size() <= 100 &&
-             data.role in ['director', 'account_manager', 'setter', 'commercial', 'client'] &&
+             data.role in ['director', 'account_manager', 'setter', 'commercial', 'designer', 'copywriter', 'client'] &&
              data.displayName is string && data.displayName.size() <= 100;
     }
 
@@ -167,6 +167,22 @@ service cloud.firestore {
       allow read: if isOwner(resource.data.userId);
       allow update: if isOwner(resource.data.userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
       allow create: if isSignedIn();
+    }
+
+    // Team Tasks & Client Deliverables
+    match /team_tasks/{taskId} {
+      function canAccessTask(taskData) {
+        return isStaffMember() ||
+               (isEmailVerified() && userExists() && getUserData().role == 'client' && 
+                getUserData().assignedClientId == taskData.clientId && 
+                (taskData.visibleToClient == true || taskData.status in ['waiting_client_feedback', 'completed']));
+      }
+
+      allow list: if isSignedIn();
+      allow get: if isSignedIn() && canAccessTask(resource.data);
+      allow create: if isSignedIn() && isStaffMember();
+      allow update: if isSignedIn() && (isStaffMember() || canAccessTask(resource.data));
+      allow delete: if isSignedIn() && (isDirector() || isAM());
     }
   }
 }

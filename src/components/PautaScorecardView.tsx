@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Client, UserProfile, PautaScorecard, PautaWeekData, Lead } from '../types';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { fetchMetaAdsInsights } from '../lib/metaAds';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -385,28 +386,13 @@ export function PautaScorecardView({
     }
 
     try {
-      // Call backend proxy route to avoid CORS and get precise weekly breakdown
-      const res = await fetch("/api/meta/insights", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          accountId,
-          accessToken: token,
-          year: selectedYear,
-          month: selectedMonth,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || data.error) {
-        throw new Error(data.error || "Error al conectar con la API de Meta Ads");
-      }
+      // Execute robust sync engine (attempts server proxy, falls back to direct Meta Graph API with exact date splits)
+      const data = await fetchMetaAdsInsights(accountId, token, selectedYear, selectedMonth);
 
       const { weeks, totalSpend, totalLeads, cleanAccountId } = data;
 
       if (!weeks) {
-        throw new Error("Formato de respuesta inválido de Meta Insights");
+        throw new Error("No se obtuvieron semanas válidas de Meta Ads");
       }
 
       const updatedWeeks = {

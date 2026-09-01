@@ -68,8 +68,9 @@ import ClientReportsDashboard from './components/ClientReportsDashboard';
 import ClientTemplates from './components/ClientTemplates';
 import TrashBin from './components/TrashBin';
 import { PautaScorecardView } from './components/PautaScorecardView';
+import TaskManager from './components/TaskManager';
 import { DatePicker } from './components/ui/DatePicker';
-import { Briefcase, Target, User as UserIcon, Lock, ShieldCheck, Mail, History as HistoryIcon, Activity, BarChart3, ChartPie, FileCode, Trash2, ArrowLeft, Percent, Grid, List, RefreshCcw, Info, Megaphone } from 'lucide-react';
+import { Briefcase, Target, User as UserIcon, Lock, ShieldCheck, Mail, History as HistoryIcon, Activity, BarChart3, ChartPie, FileCode, Trash2, ArrowLeft, Percent, Grid, List, RefreshCcw, Info, Megaphone, CheckSquare } from 'lucide-react';
 
 const PRESET_AVATARS = [
   { name: 'Casual 1', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80' },
@@ -88,6 +89,8 @@ const getRoleLabel = (role: UserRole) => {
   switch (role) {
     case 'director': return 'Director';
     case 'account_manager': return 'Account Manager';
+    case 'designer': return 'Diseñador';
+    case 'copywriter': return 'Copywriter';
     case 'setter': return 'Setter';
     case 'commercial': return 'Commercial';
     case 'client': return 'Cliente';
@@ -1400,6 +1403,16 @@ export default function App() {
                       setIsMobileMenuOpen(false);
                     }} 
                   />
+                  <SidebarItem 
+                    icon={<CheckSquare size={18} />} 
+                    label="Tareas & Pedidos" 
+                    active={activeTab === 'tasks' && !selectedClientId} 
+                    onClick={() => {
+                      setActiveTab('tasks');
+                      setSelectedClientId('');
+                      setIsMobileMenuOpen(false);
+                    }} 
+                  />
                 </>
               )}
 
@@ -1413,6 +1426,12 @@ export default function App() {
                     label="Escritorio" 
                     active={activeTab === 'dashboard'} 
                     onClick={() => { setActiveTab('dashboard'); setIsMobileMenuOpen(false); }} 
+                  />
+                  <SidebarItem 
+                    icon={<CheckSquare size={18} />} 
+                    label={profile?.role === 'client' ? "Mis Creativos & Tareas" : "Tareas & Creativos"} 
+                    active={activeTab === 'tasks'} 
+                    onClick={() => { setActiveTab('tasks'); setIsMobileMenuOpen(false); }} 
                   />
                   {showLeadsSection && (
                     <SidebarItem 
@@ -1564,6 +1583,15 @@ export default function App() {
                   setSelectedClientId('');
                 }} 
               />
+              <SidebarItem 
+                icon={<CheckSquare size={18} />} 
+                label="Tareas & Pedidos" 
+                active={activeTab === 'tasks' && !selectedClientId} 
+                onClick={() => {
+                  setActiveTab('tasks');
+                  setSelectedClientId('');
+                }} 
+              />
             </>
           )}
 
@@ -1583,6 +1611,12 @@ export default function App() {
                       label="Escritorio" 
                       active={activeTab === 'dashboard'} 
                       onClick={() => setActiveTab('dashboard')} 
+                    />
+                    <SidebarItem 
+                      icon={<CheckSquare size={18} />} 
+                      label={profile?.role === 'client' ? "Mis Creativos & Tareas" : "Tareas & Creativos"} 
+                      active={activeTab === 'tasks'} 
+                      onClick={() => setActiveTab('tasks')} 
                     />
                     {showLeadsSection && (
                       <SidebarItem 
@@ -2857,6 +2891,17 @@ export default function App() {
           ) : (
             <>
               {activeTab === 'dashboard' && <DashboardStats profile={profile} isDemoMode={isDemoMode} clientId={selectedClientId} />}
+              {activeTab === 'tasks' && selectedClientId && (
+                <div className="w-full max-w-7xl mx-auto px-4 py-4">
+                  <TaskManager 
+                    isDemoMode={isDemoMode} 
+                    currentProfile={profile} 
+                    clients={clients} 
+                    users={allUsers} 
+                    scopedClientId={selectedClientId} 
+                  />
+                </div>
+              )}
               {activeTab === 'templates' && selectedClient && (
                 <ClientTemplates client={selectedClient} isDemoMode={isDemoMode} />
               )}
@@ -2894,6 +2939,16 @@ export default function App() {
                 />
               )}
             </>
+          )}
+          {activeTab === 'tasks' && !selectedClientId && (
+            <div className="w-full max-w-7xl mx-auto px-4 py-8">
+              <TaskManager 
+                isDemoMode={isDemoMode} 
+                currentProfile={profile} 
+                clients={clients} 
+                users={allUsers} 
+              />
+            </div>
           )}
           {activeTab === 'settings' && (profile?.role === 'director' || profile?.role === 'account_manager' || profile?.role === 'commercial') && <UserManagement isDemoMode={isDemoMode} currentProfile={profile} />}
           {activeTab === 'team' && profile?.role !== 'client' && (profile?.role === 'director' || profile?.role === 'account_manager' || profile?.role === 'setter' || profile?.role === 'commercial') && (

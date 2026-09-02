@@ -31,6 +31,16 @@ export interface TaskComment {
   attachments?: TaskAttachment[];
 }
 
+export type TaskWorkflowType = 'integral_copy_design' | 'direct_design' | 'direct_copy' | 'general';
+
+export type TaskStage = 
+  | 'copywriting'            // 1. Redacción de Copy
+  | 'copy_review'            // 2. Revisión de Copy (AM / Cliente)
+  | 'design_ready_to_assign' // 3. Copy Aprobado - Listo para asignar al diseñador
+  | 'designing'              // 4. Diseñador elaborando piezas
+  | 'final_review'           // 5. Revisión final y Feedback de cliente
+  | 'completed';             // 6. Todo aprobado y finalizado
+
 export interface TeamTask {
   id: string;
   title: string;
@@ -38,6 +48,20 @@ export interface TeamTask {
   category: TaskCategory;
   priority: TaskPriority;
   status: TaskStatus;
+
+  // Workflow Pipeline Tracking
+  workflowType?: TaskWorkflowType;
+  stage?: TaskStage;
+  copyApproved?: boolean;
+  copyApprovedAt?: string;
+  copyApprovedBy?: string;
+  copyNotes?: string;
+  copyDocUrl?: string;
+  designNotes?: string;
+  designerId?: string;
+  designerName?: string;
+  copywriterId?: string;
+  copywriterName?: string;
   
   // Who created & who is assigned
   creatorId: string;

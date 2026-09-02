@@ -6,7 +6,8 @@ import {
   TaskComment, 
   UserProfile, 
   Client,
-  TaskAttachment 
+  TaskAttachment,
+  TaskStage
 } from '../types';
 import { 
   Dialog, 
@@ -22,6 +23,7 @@ import { Textarea } from './ui/textarea';
 import { Badge } from './ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { toast } from 'sonner';
+import TaskWorkflowStepper from './TaskWorkflowStepper';
 import {
   CheckCircle2,
   Clock,
@@ -255,6 +257,29 @@ export default function TaskDetailModal({
   };
 
   // 6. Action: Pass / Handover Task to another Team Member (e.g. Copy to Designer)
+  const handleStageChange = async (newStage: TaskStage) => {
+    const nowIso = new Date().toISOString();
+    let updatedStatus: TaskStatus = task.status;
+    
+    if (newStage === 'completed') {
+      updatedStatus = 'completed';
+    } else if (newStage === 'final_review' || newStage === 'copy_review') {
+      updatedStatus = task.visibleToClient ? 'waiting_client_feedback' : 'internal_review';
+    } else {
+      updatedStatus = 'in_progress';
+    }
+
+    const updated: TeamTask = {
+      ...task,
+      stage: newStage,
+      status: updatedStatus,
+      updatedAt: nowIso,
+    };
+
+    await onUpdateTask(updated);
+    toast.success('Etapa de producción actualizada');
+  };
+
   const handleHandoverTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!handoverTargetUserId) {
@@ -449,6 +474,14 @@ export default function TaskDetailModal({
               <span className="text-[10px] text-muted-foreground font-mono">Status: En Proceso</span>
             </div>
           )}
+
+          {/* Workflow Stepper */}
+          <TaskWorkflowStepper
+            workflowType={task.workflowType || 'integral_copy_design'}
+            currentStage={task.stage || (task.status === 'completed' ? 'completed' : 'copywriting')}
+            onSelectStage={isStaff ? handleStageChange : undefined}
+            canAdvance={isStaff}
+          />
 
           {/* Meta Info Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 bg-muted/20 rounded-xl border border-border/20 text-xs">

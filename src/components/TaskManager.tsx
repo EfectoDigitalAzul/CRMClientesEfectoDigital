@@ -390,80 +390,86 @@ export default function TaskManager({
     return { total, pendingReceipt, inProgress, review, waitingFeedback, completed };
   }, [filteredTasks]);
 
-  // Kanban Columns Definition
-  const kanbanColumns: { id: TaskStatus; title: string; icon: string; badgeColor: string }[] = [
-    { id: 'pending_receipt', title: 'Pendiente de Recepción', icon: '🔔', badgeColor: 'bg-amber-500/15 text-amber-600 border-amber-500/30' },
-    { id: 'in_progress', title: 'En Proceso', icon: '⏳', badgeColor: 'bg-blue-500/15 text-blue-600 border-blue-500/30' },
-    { id: 'internal_review', title: 'Revisión Interna', icon: '🔍', badgeColor: 'bg-purple-500/15 text-purple-600 border-purple-500/30' },
-    { id: 'waiting_client_feedback', title: 'Feedback del Cliente', icon: '💬', badgeColor: 'bg-pink-500/15 text-pink-600 border-pink-500/30' },
-    { id: 'completed', title: 'Completada / Aprobada', icon: '✅', badgeColor: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30' },
+  // Kanban Columns Definition - Refined minimal colors
+  const kanbanColumns: { id: TaskStatus; title: string; icon: string; dotColor: string }[] = [
+    { id: 'pending_receipt', title: 'Pendiente de Visto', icon: '🔔', dotColor: 'bg-amber-500' },
+    { id: 'in_progress', title: 'En Proceso', icon: '⏳', dotColor: 'bg-blue-500' },
+    { id: 'internal_review', title: 'Revisión Interna', icon: '🔍', dotColor: 'bg-purple-500' },
+    { id: 'waiting_client_feedback', title: 'Feedback Cliente', icon: '💬', dotColor: 'bg-pink-500' },
+    { id: 'completed', title: 'Completada / Aprobada', icon: '✅', dotColor: 'bg-emerald-500' },
   ];
 
   const getPriorityBadge = (priority: TaskPriority) => {
     switch (priority) {
       case 'urgent':
-        return <Badge className="bg-red-500 text-white font-black text-[9px] uppercase px-1.5 py-0">🔴 Urgente</Badge>;
+        return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold bg-rose-500/10 text-rose-600 border border-rose-500/20">Urgente</span>;
       case 'high':
-        return <Badge className="bg-orange-500/15 text-orange-600 border border-orange-500/30 font-bold text-[9px] px-1.5 py-0">🟠 Alta</Badge>;
+        return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-500/10 text-amber-600 border border-amber-500/20">Alta</span>;
       case 'medium':
-        return <Badge className="bg-amber-500/15 text-amber-600 border border-amber-500/30 font-bold text-[9px] px-1.5 py-0">🟡 Media</Badge>;
+        return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-muted text-muted-foreground">Media</span>;
       case 'low':
       default:
-        return <Badge className="bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 font-bold text-[9px] px-1.5 py-0">🟢 Baja</Badge>;
+        return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-muted text-muted-foreground">Baja</span>;
     }
   };
 
   const getCategoryBadge = (category: TaskCategory) => {
     switch (category) {
-      case 'design': return <span className="text-[10px] font-bold text-indigo-500 flex items-center gap-0.5">🎨 Diseño</span>;
-      case 'copy': return <span className="text-[10px] font-bold text-amber-500 flex items-center gap-0.5">✍️ Copy</span>;
-      case 'pauta': return <span className="text-[10px] font-bold text-sky-500 flex items-center gap-0.5">📢 Pauta</span>;
-      case 'account_management': return <span className="text-[10px] font-bold text-purple-500 flex items-center gap-0.5">💼 AM</span>;
-      case 'general': default: return <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-0.5">⚡ General</span>;
+      case 'design': return <span className="text-[10px] font-medium text-foreground/80 flex items-center gap-1">🎨 Diseño</span>;
+      case 'copy': return <span className="text-[10px] font-medium text-foreground/80 flex items-center gap-1">✍️ Copy</span>;
+      case 'pauta': return <span className="text-[10px] font-medium text-foreground/80 flex items-center gap-1">📢 Pauta</span>;
+      case 'account_management': return <span className="text-[10px] font-medium text-foreground/80 flex items-center gap-1">💼 AM</span>;
+      case 'general': default: return <span className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">⚡ General</span>;
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* 1. Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card p-5 rounded-2xl border border-border/40 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card p-4 sm:p-5 rounded-xl border border-border/40 shadow-xs">
         <div className="flex items-center gap-3">
-          <span className="p-2.5 rounded-2xl bg-primary/10 text-primary">
-            <CheckSquare size={24} />
-          </span>
+          <div className="p-2 rounded-lg bg-primary/10 text-primary">
+            <CheckSquare size={20} />
+          </div>
           <div>
-            <h2 className="text-xl font-black tracking-tight text-foreground uppercase italic">
+            <h2 className="text-lg font-semibold tracking-tight text-foreground">
               {isClientUser ? 'Mis Creativos & Tareas' : 'Asignación de Tareas & Creativos'}
             </h2>
             <p className="text-xs text-muted-foreground">
               {isClientUser
                 ? 'Revisa entregables, deja feedback y aprueba creativos de tu marca.'
-                : 'Asignación directa a Diseñadores, Copys y equipo con confirmación de visto y feedback del cliente.'}
+                : 'Flujos integrados de Copy, Diseño y revisión con confirmación de recepción.'}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           {/* View Mode Toggle */}
-          <div className="flex items-center bg-muted/40 p-1 rounded-xl border border-border/30">
-            <Button
-              variant={viewMode === 'kanban' ? 'default' : 'ghost'}
-              size="sm"
+          <div className="flex items-center bg-muted/40 p-0.5 rounded-lg border border-border/30">
+            <button
+              type="button"
               onClick={() => setViewMode('kanban')}
-              className="h-8 text-xs font-bold gap-1.5 px-3"
+              className={`h-7 px-2.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-all ${
+                viewMode === 'kanban'
+                  ? 'bg-background text-foreground shadow-xs font-semibold'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
             >
-              <Columns size={14} />
+              <Columns size={13} />
               Kanban
-            </Button>
-            <Button
-              variant={viewMode === 'list' ? 'default' : 'ghost'}
-              size="sm"
+            </button>
+            <button
+              type="button"
               onClick={() => setViewMode('list')}
-              className="h-8 text-xs font-bold gap-1.5 px-3"
+              className={`h-7 px-2.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-all ${
+                viewMode === 'list'
+                  ? 'bg-background text-foreground shadow-xs font-semibold'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
             >
-              <List size={14} />
+              <List size={13} />
               Lista
-            </Button>
+            </button>
           </div>
 
           {/* New Task Button (Staff) */}
@@ -473,65 +479,79 @@ export default function TaskManager({
                 setEditingTask(null);
                 setIsFormOpen(true);
               }}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground font-black text-xs uppercase px-4 h-9 gap-1.5 shadow-sm"
+              size="sm"
+              className="h-8 text-xs font-medium bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 shadow-xs"
             >
-              <Plus size={16} />
-              Nueva Tarea / Pedido
+              <Plus size={14} />
+              Nueva Tarea
             </Button>
           )}
         </div>
       </div>
 
-      {/* 2. Quick Stat Counters */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+      {/* 2. Quick Stat Counters - Clean and Minimal */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
         <div 
           onClick={() => { setQuickFilter('all'); setSelectedStatus('all'); }}
-          className="p-3 bg-card border border-border/30 rounded-xl hover:border-primary/50 transition-colors cursor-pointer"
+          className="p-3 bg-card border border-border/30 rounded-lg hover:border-border transition-all cursor-pointer"
         >
-          <p className="text-[10px] font-black uppercase text-muted-foreground">Total Tareas</p>
-          <p className="text-xl font-black text-foreground mt-0.5">{stats.total}</p>
+          <p className="text-[11px] text-muted-foreground font-medium">Total</p>
+          <p className="text-lg font-semibold text-foreground mt-0.5">{stats.total}</p>
         </div>
 
         <div 
           onClick={() => { setSelectedStatus('pending_receipt'); }}
-          className="p-3 bg-amber-500/5 border border-amber-500/20 rounded-xl hover:border-amber-500/50 transition-colors cursor-pointer"
+          className="p-3 bg-card border border-border/30 rounded-lg hover:border-amber-500/40 transition-all cursor-pointer"
         >
-          <p className="text-[10px] font-black uppercase text-amber-700 dark:text-amber-400 flex items-center gap-1">
-            <span>🔔 Pendiente Visto</span>
-          </p>
-          <p className="text-xl font-black text-amber-600 mt-0.5">{stats.pendingReceipt}</p>
+          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-medium">
+            <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+            <span>Pendientes</span>
+          </div>
+          <p className="text-lg font-semibold text-foreground mt-0.5">{stats.pendingReceipt}</p>
         </div>
 
         <div 
           onClick={() => { setSelectedStatus('in_progress'); }}
-          className="p-3 bg-blue-500/5 border border-blue-500/20 rounded-xl hover:border-blue-500/50 transition-colors cursor-pointer"
+          className="p-3 bg-card border border-border/30 rounded-lg hover:border-blue-500/40 transition-all cursor-pointer"
         >
-          <p className="text-[10px] font-black uppercase text-blue-700 dark:text-blue-400">⏳ En Proceso</p>
-          <p className="text-xl font-black text-blue-600 mt-0.5">{stats.inProgress}</p>
+          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-medium">
+            <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+            <span>En Proceso</span>
+          </div>
+          <p className="text-lg font-semibold text-foreground mt-0.5">{stats.inProgress}</p>
         </div>
 
         <div 
           onClick={() => { setSelectedStatus('internal_review'); }}
-          className="p-3 bg-purple-500/5 border border-purple-500/20 rounded-xl hover:border-purple-500/50 transition-colors cursor-pointer"
+          className="p-3 bg-card border border-border/30 rounded-lg hover:border-purple-500/40 transition-all cursor-pointer"
         >
-          <p className="text-[10px] font-black uppercase text-purple-700 dark:text-purple-400">🔍 Revisión Interna</p>
-          <p className="text-xl font-black text-purple-600 mt-0.5">{stats.review}</p>
+          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-medium">
+            <span className="w-2 h-2 rounded-full bg-purple-500 shrink-0" />
+            <span>Revisión Int.</span>
+          </div>
+          <p className="text-lg font-semibold text-foreground mt-0.5">{stats.review}</p>
         </div>
 
         <div 
           onClick={() => { setSelectedStatus('waiting_client_feedback'); }}
-          className="p-3 bg-pink-500/5 border border-pink-500/20 rounded-xl hover:border-pink-500/50 transition-colors cursor-pointer"
+          className="p-3 bg-card border border-border/30 rounded-lg hover:border-pink-500/40 transition-all cursor-pointer"
         >
-          <p className="text-[10px] font-black uppercase text-pink-700 dark:text-pink-400">💬 Feedback Cliente</p>
-          <p className="text-xl font-black text-pink-600 mt-0.5">{stats.waitingFeedback}</p>
+          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-medium">
+            <span className="w-2 h-2 rounded-full bg-pink-500 shrink-0" />
+            <span>Feedback</span>
+          </div>
+          <p className="text-lg font-semibold text-foreground mt-0.5">{stats.waitingFeedback}</p>
         </div>
 
         <div 
           onClick={() => { setSelectedStatus('completed'); }}
-          className="p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-xl hover:border-emerald-500/50 transition-colors cursor-pointer"
+          className="p-3 bg-card border border-border/30 rounded-lg hover:border-emerald-500/40 transition-all cursor-pointer"
         >
-          <p className="text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-400">✅ Completadas</p>
-          <p className="text-xl font-black text-emerald-600 mt-0.5">{stats.completed}</p>
+          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-medium">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+            <span>Completadas</span>
+          </div>
+          <p className="text-lg font-semibold text-foreground mt-0.5">{stats.completed}</p>
         </div>
       </div>
 
@@ -628,7 +648,7 @@ export default function TaskManager({
 
       {/* 4. KANBAN VIEW */}
       {viewMode === 'kanban' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 overflow-x-auto pb-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3.5 overflow-x-auto pb-4">
           {kanbanColumns.map((col) => {
             const colTasks = filteredTasks.filter((t) => t.status === col.id);
             const isColumnDragOver = dragOverColumnId === col.id;
@@ -653,32 +673,32 @@ export default function TaskManager({
                   e.preventDefault();
                   handleDropOnColumn(col.id);
                 }}
-                className={`flex flex-col rounded-2xl p-3 min-w-[280px] transition-all duration-200 ${
+                className={`flex flex-col rounded-xl p-2.5 min-w-[270px] transition-all duration-150 ${
                   isColumnDragOver
-                    ? 'bg-primary/10 border-2 border-dashed border-primary shadow-lg ring-2 ring-primary/20 scale-[1.01]'
-                    : 'bg-muted/20 border border-border/40'
+                    ? 'bg-primary/5 border border-dashed border-primary ring-1 ring-primary/20'
+                    : 'bg-muted/15 border border-border/30'
                 }`}
               >
                 {/* Column Header */}
-                <div className="flex items-center justify-between pb-3 mb-2 border-b border-border/20">
-                  <div className="flex items-center gap-1.5 font-black text-xs uppercase tracking-tight text-foreground">
-                    <span>{col.icon}</span>
-                    <span>{col.title}</span>
+                <div className="flex items-center justify-between px-1.5 py-2 mb-2 border-b border-border/20">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${col.dotColor} shrink-0`} />
+                    <span className="text-xs font-semibold text-foreground">{col.title}</span>
                   </div>
-                  <Badge variant="secondary" className="text-[10px] font-black h-5 px-1.5">
+                  <span className="text-[11px] font-mono font-medium text-muted-foreground bg-background px-1.5 py-0.5 rounded border border-border/30">
                     {colTasks.length}
-                  </Badge>
+                  </span>
                 </div>
 
                 {/* Cards List */}
-                <div className="space-y-3 flex-1 overflow-y-auto max-h-[calc(100vh-320px)] pr-1">
+                <div className="space-y-2 flex-1 overflow-y-auto max-h-[calc(100vh-320px)] pr-0.5">
                   {colTasks.length === 0 ? (
-                    <div className={`py-8 text-center text-[11px] italic rounded-xl border border-dashed transition-colors ${
+                    <div className={`py-8 text-center text-xs rounded-lg border border-dashed transition-colors ${
                       isColumnDragOver 
-                        ? 'border-primary/50 text-primary bg-primary/5 font-bold' 
-                        : 'border-border/30 text-muted-foreground bg-background/50'
+                        ? 'border-primary/40 text-primary bg-primary/5 font-medium' 
+                        : 'border-border/30 text-muted-foreground/60 bg-transparent'
                     }`}>
-                      {isColumnDragOver ? 'Soltar aquí 📥' : 'Sin tareas'}
+                      {isColumnDragOver ? 'Soltar aquí' : 'Sin tareas'}
                     </div>
                   ) : (
                     colTasks.map((task) => {
@@ -701,64 +721,64 @@ export default function TaskManager({
                             setSelectedTask(task);
                             setIsDetailOpen(true);
                           }}
-                          className={`p-3.5 bg-card rounded-xl border shadow-sm transition-all cursor-grab active:cursor-grabbing space-y-2.5 group select-none ${
+                          className={`p-3 bg-card rounded-lg border transition-all cursor-grab active:cursor-grabbing space-y-2 group select-none ${
                             isBeingDragged
-                              ? 'opacity-40 scale-95 border-primary border-dashed shadow-none'
-                              : 'border-border/40 hover:border-primary/50 hover:shadow-md'
+                              ? 'opacity-40 scale-[0.98] border-primary border-dashed shadow-none'
+                              : 'border-border/40 hover:border-border hover:shadow-xs'
                           }`}
                         >
                           {/* Top Tags & Drag Handle */}
                           <div className="flex items-center justify-between gap-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-muted-foreground/40 group-hover:text-primary transition-colors">
-                                <GripVertical size={13} />
+                              <span className="text-muted-foreground/30 group-hover:text-muted-foreground transition-colors">
+                                <GripVertical size={12} />
                               </span>
                               {getPriorityBadge(task.priority)}
                               {getCategoryBadge(task.category)}
                             </div>
                             {task.clientName && (
-                              <Badge variant="outline" className="text-[9px] font-bold py-0 px-1 truncate max-w-[90px]">
+                              <span className="text-[10px] text-muted-foreground font-medium truncate max-w-[85px]">
                                 {task.clientName}
-                              </Badge>
+                              </span>
                             )}
                           </div>
 
                           {/* Title */}
-                          <h4 className="text-xs font-bold text-foreground group-hover:text-primary transition-colors leading-snug line-clamp-2">
+                          <h4 className="text-xs font-medium text-foreground group-hover:text-primary transition-colors leading-snug line-clamp-2">
                             {task.title}
                           </h4>
 
                           {/* Deliverable link pill if exists */}
                           {task.deliverableUrl && (
-                            <div className="p-1.5 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-between text-[10px] font-bold text-primary">
+                            <div className="px-2 py-1 rounded bg-primary/5 border border-primary/20 flex items-center justify-between text-[10px] font-medium text-primary">
                               <span className="flex items-center gap-1 truncate">
                                 <Sparkles size={11} />
-                                Entregable Listo
+                                Entregable listo
                               </span>
-                              <ExternalLink size={11} className="shrink-0" />
+                              <ExternalLink size={10} className="shrink-0" />
                             </div>
                           )}
 
                           {/* Client approval pill */}
                           {task.clientApproved && (
-                            <div className="p-1 rounded-md bg-emerald-500/10 text-emerald-600 text-[10px] font-bold flex items-center gap-1">
+                            <div className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 text-[10px] font-medium flex items-center gap-1">
                               <CheckCircle2 size={11} />
-                              Aprobado por Cliente
+                              Aprobado por cliente
                             </div>
                           )}
 
                           {/* Bottom Row: Assignee & Date */}
-                          <div className="pt-2 border-t border-border/20 flex items-center justify-between text-[10px] text-muted-foreground">
-                            <div className="flex items-center gap-1.5 font-bold text-foreground truncate">
-                              <div className="w-5 h-5 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[9px] font-black shrink-0">
+                          <div className="pt-2 border-t border-border/20 flex items-center justify-between text-[11px] text-muted-foreground">
+                            <div className="flex items-center gap-1.5 font-medium text-foreground truncate">
+                              <div className="w-4 h-4 rounded-full bg-muted text-foreground flex items-center justify-center text-[9px] font-bold shrink-0">
                                 {task.assigneeName.charAt(0)}
                               </div>
-                              <span className="truncate">{task.assigneeName}</span>
+                              <span className="truncate text-xs">{task.assigneeName}</span>
                             </div>
 
                             {task.dueDate && (
-                              <div className="flex items-center gap-1 font-semibold shrink-0">
-                                <Calendar size={11} className="text-emerald-500" />
+                              <div className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground shrink-0">
+                                <Calendar size={10} />
                                 <span>{task.dueDate.split('-').slice(1).join('/')}</span>
                               </div>
                             )}
@@ -766,10 +786,10 @@ export default function TaskManager({
 
                           {/* Quick Receipt Confirmation Button if not received */}
                           {!task.isReceived && (
-                            <div className="pt-1">
-                              <span className="w-full py-1 rounded bg-amber-500/15 border border-amber-500/30 text-amber-600 text-[9px] font-black uppercase flex items-center justify-center gap-1">
-                                <BellRing size={10} className="animate-pulse" />
-                                Pendiente de Visto
+                            <div className="pt-0.5">
+                              <span className="w-full py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-600 text-[9px] font-medium flex items-center justify-center gap-1">
+                                <BellRing size={10} />
+                                Pendiente visto
                               </span>
                             </div>
                           )}
